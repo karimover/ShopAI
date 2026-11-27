@@ -38,7 +38,7 @@ AI возвращает структурированный контент и п�
 Открой Terminal и выполни:
 
 ```bash
-git clone https://github.com/karimover/ShopAI.git
+git clone --branch mvp/full-stack-core https://github.com/karimover/ShopAI.git
 cd ShopAI
 npm install
 cp .env.example .env
@@ -72,7 +72,7 @@ Vite покажет адрес frontend, обычно **http://localhost:5173**.
 Открой PowerShell в папке, где хочешь разместить проект:
 
 ```powershell
-git clone https://github.com/karimover/ShopAI.git
+git clone --branch mvp/full-stack-core https://github.com/karimover/ShopAI.git
 Set-Location ShopAI
 npm install
 Copy-Item .env.example .env
