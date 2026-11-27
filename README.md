@@ -4,6 +4,25 @@
 
 Сервис помогает владельцу небольшого бизнеса пройти основной путь запуска магазина в одном рабочем пространстве: создать магазин, наполнить каталог, подготовить тексты с помощью AI, собрать оформление витрины, опубликовать её и принимать заявки на заказы.
 
+## Демо
+
+**Работающая версия:** [shopai.karimover06.workers.dev](https://shopai.karimover06.workers.dev/)
+
+Production-развёртывание работает на Cloudflare Workers: React/Vite frontend отдаётся через Workers Static Assets, Express API выполняется внутри Worker, постоянные данные хранятся в Cloudflare D1, а изображения — в таблице D1 `uploads` в формате BLOB. Локальная разработка использует JSON-файл и папку `uploads/`.
+
+## Скриншоты
+
+Скриншоты ниже показывают интерфейс на демонстрационном аккаунте. Значения в полях, карточках товаров и каталоге являются тестовыми.
+
+### Панель управления
+![Панель управления ShopAI](docs/screenshots/dashboard.webp)
+
+### AI-конструктор сайта
+![AI-конструктор ShopAI](docs/screenshots/ai-builder.webp)
+
+### Каталог товаров
+![Каталог товаров ShopAI](docs/screenshots/products.webp)
+
 ## Возможности MVP
 
 - Регистрация, вход и выход владельца магазина.
@@ -24,10 +43,10 @@ AI возвращает структурированный контент и п�
 | Часть | Технологии |
 |---|---|
 | Frontend | React 19, TypeScript, Vite |
-| Backend | Node.js 22+, Express |
-| Хранение MVP | JSON-файл с атомарной записью |
+| Backend | Node.js 22+, Express; Cloudflare Workers adapter через `cloudflare:node` |
+| Хранение | Локально: JSON-файл; production: Cloudflare D1; изображения: D1 BLOB (`uploads`) |
 | Авторизация | HttpOnly session cookie, хеширование паролей через scrypt |
-| AI | Cloudflare Workers AI, OpenAI-совместимый Chat Completions API |
+| AI | Cloudflare Workers AI, OpenAI-совместимый Chat Completions API |\n| Хостинг | Cloudflare Workers + Workers Static Assets |
 | Тесты | Node.js built-in test runner |
 | UI | CSS, Lucide Icons |
 
@@ -38,7 +57,7 @@ AI возвращает структурированный контент и п�
 Открой Terminal и выполни:
 
 ```bash
-git clone --branch mvp/full-stack-core https://github.com/karimover/ShopAI.git
+git clone https://github.com/karimover/ShopAI.git
 cd ShopAI
 npm install
 cp .env.example .env
@@ -177,7 +196,7 @@ Get-ChildItem uploads -File | Remove-Item
 
 **AI вернул ошибку.** Проверь Account ID, актуальность Workers AI API Token, имя модели и сообщение в терминале backend. Не вставляй токен в переписку или issue.
 
-**Изменения кода не появились в браузере.** Убедись, что находишься в ветке `mvp/full-stack-core`, выполни `git pull origin mvp/full-stack-core` и обнови страницу.
+**Изменения кода не появились в браузере.** Убедись, что находишься в ветке `main`, выполни `git pull origin main` и обнови страницу.
 
 ## Структура репозитория
 
@@ -205,7 +224,7 @@ ShopAI/
 
 ## Ограничения текущего MVP
 
-- JSON-хранилище подходит для локального учебного MVP и одного экземпляра backend; оно не заменяет production-БД.
+- В локальном режиме используется JSON-хранилище. В Cloudflare deployment постоянные данные хранятся в D1; текущая схема хранит состояние приложения в одной версионируемой JSON-записи, поэтому перед коммерческой нагрузкой её следует нормализовать.
 - Нет онлайн-оплаты, эквайринга, расчёта доставки и интеграции со службами доставки.
 - Нет собственных доменов, командных ролей и полноценного drag-and-drop редактора блоков.
 - Сайт собирается из управляемого React-шаблона; AI меняет контент и поддерживаемые настройки дизайна.
