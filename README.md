@@ -54,7 +54,7 @@ open -a TextEdit .env
 
 ```env
 CLOUDFLARE_ACCOUNT_ID=твой_account_id
-CLOUDFLARE_API_TOKEN=твой_workers_ai_token
+SHOPAI_CLOUDFLARE_API_TOKEN=твой_workers_ai_token
 CLOUDFLARE_AI_MODEL=@cf/google/gemma-4-26b-a4b-it
 PORT=3001
 ```
@@ -276,7 +276,7 @@ npx wrangler@latest secret put CLOUDFLARE_ACCOUNT_ID
 npx wrangler@latest secret put CLOUDFLARE_API_TOKEN
 ```
 
-После каждой команды Wrangler попросит ввести значение. Не вставляй секрет в команду, GitHub, issue или чат. Имя модели уже задано в `wrangler.jsonc`.
+После каждой команды Wrangler попросит ввести значение. Для опубликованного Worker имя секрета остаётся `CLOUDFLARE_API_TOKEN`. Не вставляй секрет в команду, GitHub, issue или чат. Имя модели уже задано в `wrangler.jsonc`.
 
 ### 5. Первый деплой
 
