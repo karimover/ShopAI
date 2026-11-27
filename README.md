@@ -78,6 +78,7 @@ archive/
 - [Roadmap](docs/ROADMAP.md)
 - [AI usage and limitations](docs/AI_USAGE.md)
 - [Testing checklist](docs/TESTING.md)
+- [Control-point slide outline](docs/CONTROL_POINT_PRESENTATION.md)
 - [Control-point speaker script](docs/SPEAKER_SCRIPT.md)
 - [Control-point form reference](docs/CONTROL_POINT_FORM.md)
 - [Proposed team plan](docs/TEAM_PLAN.md)
