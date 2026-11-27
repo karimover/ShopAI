@@ -70,6 +70,7 @@ const app = await createApp({
   uploadStorage,
   secureCookies: true,
   assetsServedExternally: true,
+  fetchBodyParser: true,
 })
 
 app.listen(3000)
