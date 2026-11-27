@@ -11,7 +11,13 @@
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "preview": "vite preview",
     "test": "node --test",
-    "lint": "tsc -b --pretty false"
+    "lint": "tsc -b --pretty false",
+    "deploy:cloudflare": "npm run build && npx wrangler@latest deploy",
+    "cf:login": "npx wrangler@latest login",
+    "cf:dev": "npm run build && npx wrangler@latest dev",
+    "cf:db:create": "npx wrangler@latest d1 create shopai-db",
+    "cf:db:migrate": "npx wrangler@latest d1 migrations apply shopai-db --remote",
+    "cf:r2:create": "npx wrangler@latest r2 bucket create shopai-uploads"
   },
   "dependencies": {
     "express": "^4.21.2",
