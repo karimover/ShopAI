@@ -27,14 +27,14 @@ AI помогает владельцу магазина подготовить �
 ```env
 CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
 CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
-CLOUDFLARE_AI_MODEL=@cf/meta/llama-3.1-8b-instruct
+CLOUDFLARE_AI_MODEL=@cf/google/gemma-4-26b-a4b-it
 ```
 
 5. Перезапустите backend.
 
 Официальный endpoint: `https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1/chat/completions`. Запросы выполняются только сервером с заголовком `Authorization: Bearer`.
 
-Workers AI предоставляет бесплатную квоту 10 000 Neurons в сутки. На Free-плане после исчерпания квоты запросы не выполняются; на Workers Paid использование сверх квоты тарифицируется. Некоторые frontier-модели требуют платёжный способ. Для стартовой конфигурации ShopAI выбрана модель `@cf/meta/llama-3.1-8b-instruct`.
+Workers AI предоставляет бесплатную квоту 10 000 Neurons в сутки. На Free-плане после исчерпания квоты запросы не выполняются; на Workers Paid использование сверх квоты тарифицируется. Некоторые frontier-модели требуют платёжный способ. Для стартовой конфигурации ShopAI выбрана модель `@cf/google/gemma-4-26b-a4b-it`.
 
 Секретный токен не передаётся в браузер и не коммитится в Git. Не используйте реальные конфиденциальные данные покупателей в тестовых запросах.
 
