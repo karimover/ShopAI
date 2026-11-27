@@ -71,7 +71,7 @@ JSON-хранилище не рассчитано на несколько экз
 - Вызовы выполняются только на сервере.
 - Настройки: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_AI_MODEL`.
 - Используется OpenAI-совместимый endpoint Cloudflare Workers AI: `/accounts/{account_id}/ai/v1/chat/completions`.
-- Модель по умолчанию: `@cf/meta/llama-3.1-8b-instruct`.
+- Модель по умолчанию: `@cf/google/gemma-4-26b-a4b-it`.
 - Ответ содержит JSON: для карточки товара — `description` и `seoTitle`; для конструктора витрины — поля `siteConfig`.
 - Промпты запрещают выдумывать характеристики, сертификаты и свойства.
 - Если настройки отсутствуют, сервер возвращает demo-черновик карточки товара, а AI-конструктор сайта сообщает, что провайдер не подключён.
