@@ -282,7 +282,37 @@ export async function createApp(options = {}) {
 
   const app = express()
   app.disable('x-powered-by')
-  app.use(express.json({ limit: '8mb' }))
+  // Cloudflare Workers provides Fetch Request bodies; avoid Express body-parser's
+  // raw-body/iconv-lite Node stream detection path, which is incompatible with workerd.
+  if (options.fetchBodyParser) {
+    app.use((req, res, next) => {
+      if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+        req.body = {}
+        return next()
+      }
+
+      const contentType = req.headers['content-type'] || ''
+      if (!contentType.toLowerCase().includes('application/json')) {
+        req.body = {}
+        return next()
+      }
+
+      let raw = ''
+      req.setEncoding('utf8')
+      req.on('data', (chunk) => { raw += chunk })
+      req.on('end', () => {
+        try {
+          req.body = raw ? JSON.parse(raw) : {}
+          next()
+        } catch {
+          res.status(400).json({ error: 'Некорректный JSON в запросе.' })
+        }
+      })
+      req.on('error', next)
+    })
+  } else {
+    app.use(express.json({ limit: '8mb' }))
+  }
 
   // D1-backed requests are reloaded from durable storage and serialized per isolate.
   // The D1 revision check prevents silent overwrites across separate Worker isolates.
