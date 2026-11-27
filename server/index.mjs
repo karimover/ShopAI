@@ -125,7 +125,7 @@ async function generateCloudflareJson(prompt, maxOutputTokens = 1200) {
         { role: 'user', content: prompt },
       ],
       temperature: 0.45,
-      max_tokens: maxOutputTokens,
+      max_completion_tokens: maxOutputTokens,
     }),
     signal: AbortSignal.timeout(45000),
   })
@@ -146,8 +146,17 @@ async function generateCloudflareJson(prompt, maxOutputTokens = 1200) {
   }
 
   const payload = await response.json()
-  const raw = payload.choices && payload.choices[0] && payload.choices[0].message && payload.choices[0].message.content
-  if (typeof raw !== 'string' || !raw.trim()) throw new Error('CLOUDFLARE_EMPTY_RESPONSE')
+  const message = payload.choices && payload.choices[0] && payload.choices[0].message
+  const raw = message && (message.content || message.reasoning_content)
+  if (typeof raw !== 'string' || !raw.trim()) {
+    console.error('Cloudflare Workers AI returned no text:', JSON.stringify({
+      finish_reason: payload.choices && payload.choices[0] && payload.choices[0].finish_reason,
+      hasContent: Boolean(message && message.content),
+      hasReasoningContent: Boolean(message && message.reasoning_content),
+      usage: payload.usage
+    }))
+    throw new Error('CLOUDFLARE_EMPTY_RESPONSE')
+  }
 
   const cleaned = raw.trim()
     .replace(/^\u0060{3}(?:json)?\s*/i, '')
@@ -449,8 +458,9 @@ export async function createApp(options = {}) {
       if (error.message === 'CLOUDFLARE_RATE_LIMIT') return res.status(429).json({ error: 'Дневная квота Cloudflare Workers AI временно исчерпана. Попробуйте позже.' })
       if (error.message === 'CLOUDFLARE_AUTH_ERROR') return res.status(502).json({ error: 'Cloudflare отклонил токен или не хватает разрешений. Проверьте Account ID и Workers AI API Token.' })
       if (error.message === 'CLOUDFLARE_MODEL_UNAVAILABLE') return res.status(503).json({ error: 'Модель Cloudflare недоступна или удалена. Обновите CLOUDFLARE_AI_MODEL в .env.' })
+      if (error.message === 'CLOUDFLARE_EMPTY_RESPONSE' || error.message === 'CLOUDFLARE_INVALID_JSON') return res.status(502).json({ error: 'Cloudflare вернул пустой или некорректный ответ. Попробуйте ещё раз.' })
       console.error('Cloudflare product copy failed:', error.message)
-      return res.status(502).json({ error: 'Cloudflare Workers AI временно не смог создать описание. Проверьте API-ключ и модель.' })
+      return res.status(502).json({ error: 'Cloudflare Workers AI временно не смог создать описание. Подробности смотрите в терминале.' })
     }
   }))
 
@@ -507,8 +517,9 @@ export async function createApp(options = {}) {
       if (error.message === 'CLOUDFLARE_RATE_LIMIT') return res.status(429).json({ error: 'Дневная квота Cloudflare Workers AI временно исчерпана. Попробуйте позже.' })
       if (error.message === 'CLOUDFLARE_AUTH_ERROR') return res.status(502).json({ error: 'Cloudflare отклонил токен или не хватает разрешений. Проверьте Account ID и Workers AI API Token.' })
       if (error.message === 'CLOUDFLARE_MODEL_UNAVAILABLE') return res.status(503).json({ error: 'Модель Cloudflare недоступна или удалена. Обновите CLOUDFLARE_AI_MODEL в .env.' })
+      if (error.message === 'CLOUDFLARE_EMPTY_RESPONSE' || error.message === 'CLOUDFLARE_INVALID_JSON') return res.status(502).json({ error: 'Cloudflare вернул пустой или некорректный ответ. Попробуйте ещё раз.' })
       console.error('Cloudflare storefront generation failed:', error.message)
-      return res.status(502).json({ error: 'Cloudflare Workers AI не смог создать сайт. Проверьте ключ и попробуйте ещё раз.' })
+      return res.status(502).json({ error: 'Cloudflare Workers AI не смог создать сайт. Подробности смотрите в терминале.' })
     }
   }))
 
