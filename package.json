@@ -16,8 +16,7 @@
     "cf:login": "npx wrangler@latest login",
     "cf:dev": "npm run build && npx wrangler@latest dev",
     "cf:db:create": "npx wrangler@latest d1 create shopai-db --binding DB",
-    "cf:db:migrate": "npx wrangler@latest d1 migrations apply shopai-db --remote",
-    "cf:r2:create": "npx wrangler@latest r2 bucket create shopai-uploads"
+    "cf:db:migrate": "npx wrangler@latest d1 migrations apply shopai-db --remote"
   },
   "dependencies": {
     "express": "^4.21.2",
