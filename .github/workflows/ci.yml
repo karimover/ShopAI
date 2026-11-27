@@ -2,12 +2,12 @@ name: ShopAI CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "mvp/**"]
   pull_request:
     branches: [main]
 
 jobs:
-  build:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,5 +18,9 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Build application
+      - name: Check server syntax
+        run: node --check server/index.mjs
+      - name: Run API tests
+        run: npm test
+      - name: Build frontend
         run: npm run build

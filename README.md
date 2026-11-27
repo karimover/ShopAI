@@ -1,106 +1,108 @@
 # ShopAI
 
-**AI-assisted commerce workspace for creating and managing online stores.**
+**Платформа для создания интернет-магазинов с AI-помощником.**
 
-ShopAI is a product concept and interactive MVP for entrepreneurs who want to launch a storefront, manage a catalog and orders, and prepare product content with an AI assistant — from one workspace.
+ShopAI помогает предпринимателю пройти базовый путь запуска магазина в одном рабочем пространстве: создать аккаунт и магазин, добавить каталог, подготовить карточки товаров с AI, опубликовать витрину и получить заказ.
 
-> Current status: frontend MVP / demo. The application currently uses local browser storage and mock business data. AI Studio is a deterministic demo generator, not a live LLM integration. Backend, authentication, real checkout, payments and shipping integrations are planned, not implemented.
+## Что входит в MVP
 
-## Preview
+- Регистрация и вход владельца магазина; один магазин на аккаунт.
+- Настройки магазина: название, описание, категория и основной цвет витрины.
+- Каталог: создание, просмотр, редактирование, удаление и поиск товаров.
+- Цена, остаток, описание, SEO-заголовок и загрузка фотографии PNG/JPEG/WebP до 4 МБ.
+- AI-помощник в карточке товара: черновик описания и SEO по названию, категории и характеристикам; выбор стиля, редактирование и повторная генерация.
+- Серверный адаптер к OpenAI-compatible Chat Completions API. Секретный ключ хранится только на сервере.
+- Явно маркированный демонстрационный режим AI, если модель не настроена.
+- Публичная витрина по адресу /shop/<slug>.
+- Корзина и оформление заявки без онлайн-оплаты.
+- Кабинет владельца: список заказов, контакты покупателя, состав заказа и изменение статуса.
+- Проверка остатков при заказе и возврат остатка при отмене.
 
-The app is designed around a calm, premium commerce aesthetic: deep ink navigation, warm neutral surfaces, restrained violet accents, precise typography, compact data tables and editorial storefront imagery. The UI is responsive and includes light/dark themes.
+## Что намеренно не входит в MVP
 
-## Features in the current MVP
+Онлайн-оплата, эквайринг, доставка, несколько шаблонов, полноценный визуальный редактор страниц, собственные домены, командные роли, сложный склад и расширенная аналитика.
 
-- Overview dashboard with revenue metrics, sales chart and recent orders.
-- Product catalog with search, create, edit and delete flows.
-- Local persistence of catalog changes using browser localStorage.
-- Orders and customer views populated with clearly marked demo data.
-- AI Studio with editable product inputs, tone selection, generated copy and copy-to-clipboard.
-- Storefront preview with editable store name and product cards.
-- Settings view and light/dark theme toggle.
-- Responsive sidebar and mobile layout.
+Заказ в MVP — это заявка, которую владелец обрабатывает вручную и согласует оплату/доставку отдельно. Это не полноценный checkout с оплатой.
 
-## Stack
+## Технологии
 
-- React 19 + TypeScript
-- Vite
-- Recharts
-- Lucide React
-- CSS design tokens and responsive styles
+- Frontend: React 19, TypeScript, Vite.
+- Backend: Node.js 22, Express.
+- Хранилище MVP: JSON-файл на сервере с атомарной записью.
+- Авторизация: серверная сессия в HttpOnly cookie; пароли хешируются через scrypt.
+- AI: серверный адаптер к OpenAI-compatible Chat Completions API; локальный demo-режим без внешнего вызова.
+- Тесты: Node.js built-in test runner.
 
-## Run locally
+**Ограничение хранения:** JSON-хранилище предназначено для локального учебного MVP и одного экземпляра приложения. Перед публичным многопользовательским запуском его необходимо заменить на PostgreSQL или другую серверную СУБД, добавить миграции, резервное копирование, мониторинг и дополнительные меры защиты.
 
-Requires Node.js 20+.
+## Запуск на Mac / Windows / Linux
 
-```bash
-git clone https://github.com/karimover/ShopAI.git
-cd ShopAI
-npm install
-npm run dev
-```
+Требуется Node.js 22 или новее.
 
-Open the local URL printed by Vite.
+    git clone https://github.com/karimover/ShopAI.git
+    cd ShopAI
+    npm install
+    cp .env.example .env
+    npm run dev
 
-Production build:
+Открой адрес Vite, который появится в терминале. Frontend работает через Vite, backend API — на http://localhost:3001. Запросы /api и /uploads проксируются на backend.
 
-```bash
-npm run build
-npm run preview
-```
+Production-проверка:
 
-## Project structure
+    npm test
+    npm run build
+    npm start
 
-```text
-src/
-  App.tsx          # product workspace and page-level flows
-  main.tsx         # React entry point
-  index.css        # visual system and responsive layouts
-docs/
-  PRODUCT_ANALYSIS.md
-  COMPETITIVE_ANALYSIS.md
-  ARCHITECTURE.md
-  ROADMAP.md
-  AI_USAGE.md
-  TESTING.md
-  SPEAKER_SCRIPT.md
-  CONTROL_POINT_FORM.md
-  TEAM_PLAN.md
-archive/
-  early-html-prototype/
-```
+После сборки backend раздаёт frontend из dist.
 
-## Documentation
+## Подключение реальной AI-модели
 
-- [Product concept and audience](docs/PRODUCT_ANALYSIS.md)
-- [Competitor analysis](docs/COMPETITIVE_ANALYSIS.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Roadmap](docs/ROADMAP.md)
-- [AI usage and limitations](docs/AI_USAGE.md)
-- [Testing checklist](docs/TESTING.md)
-- [Control-point slide outline](docs/CONTROL_POINT_PRESENTATION.md)
-- [Control-point speaker script](docs/SPEAKER_SCRIPT.md)
-- [Control-point form reference](docs/CONTROL_POINT_FORM.md)
-- [Proposed team plan](docs/TEAM_PLAN.md)
-- [Design inspiration and references](docs/DESIGN_REFERENCES.md)
+Скопируй .env.example в .env и заполни серверные переменные:
 
-## Design references
+    SHOPAI_AI_API_URL=https://your-provider.example/v1/chat/completions
+    SHOPAI_AI_API_KEY=your-secret-key
+    SHOPAI_AI_MODEL=your-model-name
 
-The interface was independently implemented for ShopAI. The following open-source projects were reviewed for information architecture and UI patterns; their code is not copied into this repository:
+Ожидается OpenAI-compatible Chat Completions API с ответом choices[0].message.content, содержащим JSON с полями description и seoTitle.
 
-- [OrbynAdmin](https://github.com/masondevx/orbynadmin) — MIT-licensed dashboard template with commerce views, theme customization, responsive navigation and data tables.
-- [shadcn-dashboard-landing-template](https://github.com/shadcnstore/shadcn-dashboard-landing-template) — dashboard and landing page patterns, theming and responsive app structure.
-- [ecommerce-template](https://github.com/prinnotech/ecommerce-template) — broader storefront and admin workflows, product catalog, checkout and store theme editing.
-- [nextjs-ecommerce-starter](https://github.com/thefrontkit/nextjs-ecommerce-starter) — storefront patterns for product discovery, filters, product pages and cart.
+Не добавляй .env в Git и не вставляй API-ключ во frontend. Если переменные не заполнены, интерфейс работает в демонстрационном режиме и явно показывает это пользователю.
 
-See docs/DESIGN_REFERENCES.md for evaluation notes and attribution.
+## Данные и локальная разработка
 
-## Project information
+- Данные приложения сохраняются в data/shopai.json.
+- Загруженные изображения хранятся в uploads/.
+- Оба каталога исключены из Git.
+- Для сброса локальной базы останови сервер и удали data/shopai.json. Это удалит тестовые аккаунты, магазины, товары и заказы.
+- Не используй реальные персональные данные покупателей в демонстрационных тестах.
 
-- Project: Разработка платформы по созданию Интернет магазинов с ИИ помощником(16)
-- Customer: ООО «НОРМОКОНТРОЛЬ»
-- Curator: Шестеров Михаил Андреевич
+## Проверки
 
-## Roadmap
+    node --check server/index.mjs
+    npm test
+    npm run build
 
-The next major step is to replace local mock state with a typed backend API and persistent database, then implement authentication/roles and connect the AI service through a server-side adapter. See docs/ROADMAP.md.
+Автотест проверяет сквозной сценарий: регистрация → добавление товара → AI-черновик → публикация → публичная витрина → оформление заказа → заказ в кабинете → отмена и возврат остатка. Отдельно проверяется защита приватного API без сессии.
+
+## Структура
+
+- server/index.mjs — API, авторизация, товары, AI, заказы.
+- src/App.tsx — кабинет владельца и публичная витрина.
+- src/index.css — адаптивная дизайн-система.
+- tests/api.test.mjs — интеграционные проверки API.
+- docs/MVP_SCOPE.md — требования и границы MVP.
+- docs/ARCHITECTURE.md — архитектура и API.
+- docs/ROADMAP.md — дальнейшее развитие.
+- docs/TEAM_PLAN.md — роли и бэклог.
+- docs/TESTING.md — проверка MVP.
+- docs/AI_USAGE.md — использование AI и ограничения.
+
+## Команда и проект
+
+Проект: «Разработка платформы по созданию интернет-магазинов с ИИ-помощником (16)».
+
+- Эмир Каримов — frontend и пользовательский сценарий.
+- Александр Поляков — backend и данные.
+- Артур Халитов — AI-модуль.
+- Руслан Черетович — тестирование и интеграции.
+
+Дальнейшее развитие: PostgreSQL, роли пользователей, несколько шаблонов и редактор витрины, платежи, доставка, уведомления, аналитика и нагрузочные тесты.
