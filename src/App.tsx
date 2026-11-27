@@ -206,7 +206,7 @@ function DashboardApp() {
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumbs"><span>ShopAI</span><span className="crumb-divider">/</span><strong>{view === 'overview' ? 'Обзор' : view === 'builder' ? 'AI-конструктор сайта' : view === 'products' ? 'Товары' : view === 'orders' ? 'Заказы' : 'Настройки'}</strong></div>
+          <div className="breadcrumbs"><span className="crumb-brand"><img src="/shopai-mark.svg" alt="" /><span>ShopAI</span></span><span className="crumb-divider">/</span><strong>{view === 'overview' ? 'Обзор' : view === 'builder' ? 'AI-конструктор сайта' : view === 'products' ? 'Товары' : view === 'orders' ? 'Заказы' : 'Настройки'}</strong></div>
           <div className="topbar-actions">
             <span className={'store-state ' + (store.published ? 'is-live' : '')}><i />{store.published ? 'Магазин опубликован' : 'Черновик'}</span>
             {store.published && <a className="button button-light button-small" href={publicUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Открыть витрину</a>}
