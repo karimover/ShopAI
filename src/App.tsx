@@ -295,7 +295,7 @@ function Overview({ store, products, onAdd, onEdit, onViewProducts, onViewSettin
 }) {
   const hasProducts = products.length > 0
   const hasAiContent = products.some((product) => product.description.trim() && product.seoTitle.trim())
-  const completed = 1 + Number(hasProducts) + Number(hasAiContent) + Number(store.published)
+  const completed = 1 + Number(hasProducts) + Number(hasAiContent) + Number(Boolean(store.siteConfig))
   const progress = Math.round(completed / 4 * 100)
   const firstProduct = products[0]
   const publicUrl = window.location.origin + '/shop/' + store.slug
@@ -472,11 +472,6 @@ function SiteBuilder({ store, products, onSave, onPublish }: {
   }
 
   const previewProducts = products.slice(0, 3)
-  const previewStyle = {
-    '--preview-accent': SITE_PALETTES[site?.palette || palette].primary,
-    '--preview-background': SITE_PALETTES[site?.palette || palette].background,
-  } as CSSProperties
-
   return (
     <div className="page-stack ai-builder-page">
       <div className="page-heading">
@@ -520,7 +515,7 @@ function SiteBuilder({ store, products, onSave, onPublish }: {
               <>
                 <SitePreview brand={storeName} niche={niche} site={site} products={previewProducts} />
                 <div className="ai-result-actions">
-                  <button className="button button-light" type="button" onClick={() => { const node = document.getElementById('ai-site-brief'); node?.requestSubmit() }} disabled={generating}>Повторить генерацию</button>
+                  <button className="button button-light" type="button" onClick={() => { document.querySelector<HTMLFormElement>('#ai-site-brief')?.requestSubmit() }} disabled={generating}>Повторить генерацию</button>
                   <button className="button button-primary" type="button" onClick={() => void save()} disabled={saving}>{saving ? 'Сохраняем…' : saved ? 'Сайт сохранён' : 'Сохранить сайт'}<Check size={15} /></button>
                 </div>
                 {provider && <small className="ai-provider-meta">Модель: {provider}</small>}
