@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import {
-  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Box, CalendarDays,
-  Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleHelp,
-  Command, CreditCard, Download, Ellipsis, Eye, Filter, Gift, Globe2, LayoutDashboard,
+  Activity, ArrowRight, ArrowUpRight, Bell, Check, ChevronLeft, ChevronRight,
+  ChevronsUpDown, CreditCard, Download, Eye, Filter, Gift, Globe2, LayoutDashboard,
   LifeBuoy, Menu, MoreHorizontal, Package, Plus, Search, Settings2, ShieldCheck,
-  ShoppingBag, ShoppingCart, Sparkles, Star, TrendingUp, Truck, Users, WandSparkles,
+  ShoppingBag, Sparkles, Star, TrendingUp, Users, WandSparkles,
   X, Zap, type LucideIcon
 } from 'lucide-react'
 import {
