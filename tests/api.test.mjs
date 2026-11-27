@@ -91,6 +91,9 @@ test('complete MVP journey: register, create product, publish store and receive 
     assert.equal(storefront.body.products.length, 1)
     assert.equal(storefront.body.products[0].id, productId)
     assert.equal(storefront.body.store.siteConfig.heroTitle, 'Керамика для уютного дома')
+    assert.equal(storefront.body.store.siteConfig.aboutTitle, 'Небольшая мастерская')
+    assert.equal(storefront.body.store.siteConfig.designStyle, 'editorial')
+    assert.deepEqual(storefront.body.store.siteConfig.features, ['Ручная работа', 'Небольшие серии'])
 
     const orderResponse = await request('/api/public/' + slug + '/orders', {
       method: 'POST',
