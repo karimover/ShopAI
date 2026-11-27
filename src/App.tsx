@@ -174,7 +174,7 @@ function DashboardApp() {
     setOrders([])
   }
 
-  if (loading) return <div className="screen-loader"><div className="loader-mark">s.</div><span>Загружаем ShopAI</span></div>
+  if (loading) return <div className="screen-loader"><img className="loader-brand-symbol" src="/shopai-mark.svg" alt="" /><span>Загружаем ShopAI</span></div>
   if (!user) return <AuthScreen onAuthenticated={handleAuthenticated} />
   if (!store) return <div className="screen-loader">Не удалось загрузить магазин. Обновите страницу.</div>
 
@@ -183,7 +183,7 @@ function DashboardApp() {
     <div className="app-frame">
       <aside className="sidebar">
         <a className="brand" href="/" aria-label="ShopAI">
-          <span className="brand-mark">s.</span><span>shop<span>ai</span></span><i>WORKSPACE</i>
+          <img className="brand-symbol" src="/shopai-mark.svg" alt="" /><span className="brand-wordmark">shop<span>ai</span></span><i>WORKSPACE</i>
         </a>
         <div className="workspace-card">
           <div className="workspace-avatar">{store.name.slice(0, 1).toUpperCase()}</div>
@@ -264,7 +264,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: AuthResult)
   return (
     <div className="auth-layout">
       <div className="auth-brand-panel">
-        <a className="brand brand-light" href="/"><span className="brand-mark">s.</span><span>shop<span>ai</span></span></a>
+        <a className="brand brand-light" href="/" aria-label="ShopAI"><img className="brand-symbol" src="/shopai-mark.svg" alt="" /><span className="brand-wordmark">shop<span>ai</span></span></a>
         <div className="auth-message"><span className="eyebrow light">COMMERCE, MADE SIMPLE</span><h1>Ваш магазин.<br /><em>Ваши правила.</em></h1><p>Создайте витрину, подготовьте карточки товаров с AI и управляйте заказами в одном рабочем пространстве.</p></div>
         <div className="auth-footnote">SHOPAI · ПЛАТФОРМА ДЛЯ СОЗДАНИЯ ИНТЕРНЕТ-МАГАЗИНОВ</div>
       </div>
@@ -819,7 +819,7 @@ function PublicStore({ slug }: { slug: string }) {
       <main className="store-catalog" id="catalog"><div className="store-section-heading"><div><span className="eyebrow">КАТАЛОГ</span><h2>{data.store.siteConfig?.productIntro || 'Выберите то, что вам нравится'}</h2></div><span>{data.products.length} товаров</span></div>
         {data.products.length === 0 ? <EmptyState icon={<Package size={24} />} title="Каталог скоро появится" text="Владелец магазина пока не добавил доступные товары." /> : <div className="store-product-grid">{data.products.map((product) => <article className="store-product" key={product.id}><div className="store-product-image">{product.imageUrl ? <img src={product.imageUrl} alt={product.name} /> : <Package size={30} />}</div><div className="store-product-info"><span className="eyebrow">{product.category}</span><h3>{product.name}</h3><p>{product.description}</p><div className="store-product-bottom"><strong>{money(product.price)}</strong><button onClick={() => setQuantity(product.id, (cart[product.id] || 0) + 1)} disabled={cart[product.id] >= product.stock}>{cart[product.id] ? 'Добавить ещё' : 'В корзину'} <Plus size={14} /></button></div></div></article>)}</div>}
       </main>
-      <footer className="public-footer"><span>{data.store.name}</span><span>Создано с помощью ShopAI</span></footer>
+      <footer className="public-footer"><span>{data.store.name}</span><span className="powered-by"><img src="/shopai-mark.svg" alt="" /><strong>shop<span>ai</span></strong><small>Создано с помощью</small></span></footer>
       {success && <div className="success-banner"><Check size={18} />{success}<button onClick={() => setSuccess('')}><X size={16} /></button></div>}
       {checkoutOpen && <div className="modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false) }}><form className="checkout-card" onSubmit={placeOrder}><div className="modal-heading"><div><span className="eyebrow">ОФОРМЛЕНИЕ</span><h2>Ваш заказ</h2></div><button className="icon-button" type="button" onClick={() => setCheckoutOpen(false)}><X size={18} /></button></div><div className="checkout-items">{cartItems.map((product) => <div key={product.id}><span>{product.name} × {cart[product.id]}</span><strong>{money(product.price * cart[product.id])}</strong><div className="quantity-control"><button type="button" onClick={() => setQuantity(product.id, cart[product.id] - 1)}>−</button><span>{cart[product.id]}</span><button type="button" onClick={() => setQuantity(product.id, cart[product.id] + 1)} disabled={cart[product.id] >= product.stock}>+</button></div></div>)}</div><div className="checkout-total"><span>Итого</span><strong>{money(total)}</strong></div><label>Ваше имя<input required minLength={2} value={customerName} onChange={(event) => setCustomerName(event.target.value)} /></label><div className="form-row"><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label><label>Телефон<input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+7…" /></label></div><label>Адрес или способ связи<input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Необязательно" /></label><label>Комментарий<textarea rows={2} value={comment} onChange={(event) => setComment(event.target.value)} /></label>{error && <div className="inline-error"><CircleAlert size={15} />{error}</div>}<p className="checkout-note">Это заявка на заказ. Оплата и доставка будут согласованы с магазином отдельно.</p><button className="button button-primary button-full" disabled={submitting || !totalQuantity}>{submitting ? 'Отправляем…' : 'Подтвердить заказ'}<ArrowRight size={16} /></button></form></div>}
     </div>
