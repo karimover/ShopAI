@@ -99,3 +99,14 @@ JSON-хранилище не рассчитано на несколько экз
 Сейчас один магазин на аккаунт; нет командных ролей. Нет онлайн-оплаты, доставки, налогов и расчёта доставки. Сессии хранятся в JSON-файле; нет CSRF-токена, rate limiting и восстановления пароля. Для production нужна отдельная проверка безопасности.
 
 Следующие шаги: PostgreSQL и миграции, RBAC, object storage, мониторинг/логирование, интеграции платежей/доставки, нагрузочные и security-тесты.
+
+
+## 9. Развёртывание в Cloudflare Workers
+
+- Frontend: Vite build в `dist/`, раздача через Workers Static Assets с SPA fallback.
+- API: Express на Cloudflare Workers через `cloudflare:node` и флаг `nodejs_compat`.
+- D1 binding `DB`: версионируемая JSON-запись приложения для MVP; optimistic revision update предотвращает silent overwrite при конкурентной записи.
+- R2 binding `UPLOADS`: бинарные фотографии товаров с Content-Type metadata.
+- Secrets: `CLOUDFLARE_ACCOUNT_ID` и `CLOUDFLARE_API_TOKEN`; модель задана как Worker variable.
+- Публичный маршрут `/shop/:slug` отдаётся SPA, API и изображения направляются в Worker.
+- Для production-масштабирования JSON snapshot следует заменить на нормализованные D1-таблицы и транзакции.
