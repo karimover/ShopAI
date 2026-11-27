@@ -234,6 +234,10 @@ export async function createApp(options = {}) {
   app.patch('/api/store', requireAuth, route(async (req, res) => {
     const store = requireStore(req, res)
     if (!store) return
+    if (req.body.published === true) {
+      const hasPublishedProducts = db.products.some((product) => product.storeId === store.id && product.published && product.stock > 0)
+      if (!hasPublishedProducts) return res.status(409).json({ error: 'Добавьте хотя бы один товар с положительным остатком и включённой публикацией, прежде чем публиковать магазин.' })
+    }
     const name = cleanText(req.body.name, 100)
     if (name.length < 2) return res.status(400).json({ error: 'Название магазина должно содержать не менее двух символов.' })
     store.name = name

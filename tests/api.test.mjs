@@ -33,6 +33,12 @@ test('complete MVP journey: register, create product, publish store and receive 
     assert.ok(cookie)
     const slug = registration.body.store.slug
 
+    const emptyPublish = await request('/api/store', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Demo Shop', description: 'A test shop', category: 'Home', published: true }),
+    })
+    assert.equal(emptyPublish.response.status, 409)
+
     const productResponse = await request('/api/products', {
       method: 'POST',
       body: JSON.stringify({ name: 'Ceramic vase', category: 'Decor', price: 1200, stock: 5, description: 'Handmade ceramic vase', seoTitle: 'Ceramic vase' }),

@@ -24,10 +24,6 @@ type Order = {
   id: string; customerName: string; email: string; phone: string; address: string;
   comment: string; items: OrderItem[]; total: number; status: string; createdAt: string
 }
-type DashboardStats = {
-  productCount: number; publishedProductCount: number; orderCount: number;
-  newOrderCount: number; revenue: number; recentOrders: Order[]
-}
 type ApiError = { error?: string }
 type AuthResult = { user: User; store: StoreData | null }
 
@@ -56,7 +52,6 @@ function DashboardApp() {
   const [store, setStore] = useState<StoreData | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
-  const [stats, setStats] = useState<DashboardStats | null>(null)
   const [view, setView] = useState<View>('overview')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -71,16 +66,14 @@ function DashboardApp() {
   }
 
   const loadWorkspace = async () => {
-    const [storeResult, productResult, orderResult, statsResult] = await Promise.all([
+    const [storeResult, productResult, orderResult] = await Promise.all([
       api<{ store: StoreData }>('/api/store'),
       api<{ products: Product[] }>('/api/products'),
       api<{ orders: Order[] }>('/api/orders'),
-      api<DashboardStats>('/api/dashboard'),
     ])
     setStore(storeResult.store)
     setProducts(productResult.products)
     setOrders(orderResult.orders)
-    setStats(statsResult)
   }
 
   useEffect(() => {
@@ -173,7 +166,6 @@ function DashboardApp() {
     setStore(null)
     setProducts([])
     setOrders([])
-    setStats(null)
   }
 
   if (loading) return <div className="screen-loader"><div className="loader-mark">s.</div><span>Загружаем ShopAI</span></div>
@@ -194,9 +186,9 @@ function DashboardApp() {
         </div>
         <div className="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
         <nav className="side-nav">
-          <NavButton active={view === 'overview'} onClick={() => setView('overview')} icon={<LayoutDashboard size={18} />}>Обзор</NavButton>
+          <NavButton active={view === 'overview'} onClick={() => setView('overview')} icon={<LayoutDashboard size={18} />}>Создание магазина</NavButton>
           <NavButton active={view === 'products'} onClick={() => setView('products')} icon={<Package size={18} />}>Товары <span className="nav-count">{products.length}</span></NavButton>
-          <NavButton active={view === 'orders'} onClick={() => setView('orders')} icon={<ShoppingBag size={18} />}>Заказы {stats?.newOrderCount ? <span className="nav-count accent">{stats.newOrderCount}</span> : null}</NavButton>
+          <NavButton active={view === 'orders'} onClick={() => setView('orders')} icon={<ShoppingBag size={18} />}>Заказы {orders.filter((order) => order.status === 'Новый').length > 0 ? <span className="nav-count accent">{orders.filter((order) => order.status === 'Новый').length}</span> : null}</NavButton>
           <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings size={18} />}>Настройки магазина</NavButton>
         </nav>
         <div className="sidebar-bottom">
@@ -207,7 +199,7 @@ function DashboardApp() {
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumbs"><span>ShopAI</span><span className="crumb-divider">/</span><strong>{view === 'overview' ? 'Обзор' : view === 'products' ? 'Товары' : view === 'orders' ? 'Заказы' : 'Настройки'}</strong></div>
+          <div className="breadcrumbs"><span>ShopAI</span><span className="crumb-divider">/</span><strong>{view === 'overview' ? 'Создание магазина' : view === 'products' ? 'Товары' : view === 'orders' ? 'Заказы' : 'Настройки'}</strong></div>
           <div className="topbar-actions">
             <span className={'store-state ' + (store.published ? 'is-live' : '')}><i />{store.published ? 'Магазин опубликован' : 'Черновик'}</span>
             {store.published && <a className="button button-light button-small" href={publicUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Открыть витрину</a>}
@@ -215,7 +207,7 @@ function DashboardApp() {
         </header>
 
         <div className="content-wrap">
-          {view === 'overview' && <Overview store={store} stats={stats} products={products} orders={orders} onAdd={() => { setEditing(null); setModalOpen(true) }} onViewProducts={() => setView('products')} onViewOrders={() => setView('orders')} />}
+          {view === 'overview' && <Overview store={store} products={products} onAdd={() => { setEditing(null); setModalOpen(true) }} onEdit={(product) => { setEditing(product); setModalOpen(true) }} onViewProducts={() => setView('products')} onViewSettings={() => setView('settings')} />}
           {view === 'products' && <ProductsView products={filteredProducts} query={query} setQuery={setQuery} onAdd={() => { setEditing(null); setModalOpen(true) }} onEdit={(product) => { setEditing(product); setModalOpen(true) }} onDelete={deleteProduct} />}
           {view === 'orders' && <OrdersView orders={orders} onChangeStatus={updateOrder} />}
           {view === 'settings' && <SettingsView store={store} busy={busy} onSave={updateStore} onPublish={() => updateStore({ published: !store.published })} />}
@@ -289,43 +281,91 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: AuthResult)
   )
 }
 
-function Overview({ store, stats, products, orders, onAdd, onViewProducts, onViewOrders }: {
-  store: StoreData; stats: DashboardStats | null; products: Product[]; orders: Order[];
-  onAdd: () => void; onViewProducts: () => void; onViewOrders: () => void
+function Overview({ store, products, onAdd, onEdit, onViewProducts, onViewSettings }: {
+  store: StoreData; products: Product[];
+  onAdd: () => void; onEdit: (product: Product) => void; onViewProducts: () => void; onViewSettings: () => void
 }) {
+  const hasProducts = products.length > 0
+  const hasAiContent = products.some((product) => product.description.trim() && product.seoTitle.trim())
+  const completed = 1 + Number(hasProducts) + Number(hasAiContent) + Number(store.published)
+  const progress = Math.round(completed / 4 * 100)
+  const firstProduct = products[0]
+  const publicUrl = window.location.origin + '/shop/' + store.slug
+
   return (
-    <div className="page-stack">
-      <div className="page-heading"><div><span className="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Добро пожаловать в ShopAI</h1><p>Здесь вы создаёте магазин, наполняете каталог и следите за заказами.</p></div><button className="button button-primary" onClick={onAdd}><Plus size={16} /> Добавить товар</button></div>
-      <div className="welcome-strip"><div className="welcome-icon"><Store size={21} /></div><div><strong>{store.name}</strong><span>{store.published ? 'Витрина доступна покупателям' : 'Магазин пока не опубликован — настройте витрину в разделе настроек'}</span></div><span className={'pill ' + (store.published ? 'pill-green' : 'pill-amber')}>{store.published ? 'Опубликован' : 'Черновик'}</span></div>
-      <div className="metric-grid">
-        <Metric label="Товары в каталоге" value={String(stats?.productCount ?? products.length)} detail={(stats?.publishedProductCount ?? 0) + ' опубликовано'} icon={<Package size={18} />} />
-        <Metric label="Все заказы" value={String(stats?.orderCount ?? orders.length)} detail={(stats?.newOrderCount ?? 0) + ' новых'} icon={<ShoppingBag size={18} />} />
-        <Metric label="Сумма заказов" value={money(stats?.revenue ?? 0)} detail="Без отменённых заказов" icon={<ArrowUpRight size={18} />} />
-      </div>
-      <div className="two-column">
-        <section className="panel">
-          <div className="panel-heading"><div><span className="eyebrow">ПОСЛЕДНИЕ ЗАКАЗЫ</span><h2>Заказы магазина</h2></div><button className="text-button" onClick={onViewOrders}>Все заказы <ArrowRight size={14} /></button></div>
-          {orders.length === 0 ? <EmptyState icon={<ShoppingBag size={22} />} title="Заказов пока нет" text="Когда покупатель оформит заказ на витрине, он появится здесь." /> : <div className="compact-list">{(stats?.recentOrders ?? orders.slice(0, 5)).map((order) => <div className="compact-row" key={order.id}><div className="order-initial">{order.customerName.slice(0, 1).toUpperCase()}</div><div className="compact-main"><strong>{order.customerName}</strong><span>{order.id} · {dateTime(order.createdAt)}</span></div><strong className="compact-price">{money(order.total)}</strong><span className={'status ' + statusClass(order.status)}>{order.status}</span></div>)}</div>}
-        </section>
-        <section className="panel">
-          <div className="panel-heading"><div><span className="eyebrow">БЫСТРЫЙ СТАРТ</span><h2>Следующие шаги</h2></div><Sparkles size={19} className="muted-icon" /></div>
-          <div className="steps-list">
-            <div className="step-row"><span className="step-number">01</span><div><strong>Добавьте товары</strong><span>Название, фотографии, цена и характеристики</span></div><button onClick={onAdd}><ArrowRight size={16} /></button></div>
-            <div className="step-row"><span className="step-number">02</span><div><strong>Подготовьте контент с AI</strong><span>Черновики описаний и SEO-заголовков</span></div><span className="step-tag">В карточке товара</span></div>
-            <div className="step-row"><span className="step-number">03</span><div><strong>Опубликуйте витрину</strong><span>Откройте настройки магазина</span></div><button onClick={onViewProducts}><ArrowRight size={16} /></button></div>
+    <div className="page-stack builder-page">
+      <section className="builder-hero">
+        <div className="builder-hero-copy">
+          <span className="eyebrow">SHOPAI · СОЗДАНИЕ МАГАЗИНА</span>
+          <h1>Запустите свой интернет-магазин</h1>
+          <p>Пройдите несколько простых шагов: настройте магазин, добавьте товары, подготовьте описания с AI и опубликуйте витрину.</p>
+          <div className="builder-hero-actions">
+            <button className="button button-primary" onClick={hasProducts ? onViewProducts : onAdd}>
+              {hasProducts ? 'Перейти к каталогу' : 'Добавить первый товар'} <ArrowRight size={16} />
+            </button>
+            <span className="builder-no-code">Без программирования</span>
           </div>
+        </div>
+        <div className="builder-visual" aria-hidden="true">
+          <div className="builder-orbit orbit-one" />
+          <div className="builder-orbit orbit-two" />
+          <div className="builder-store-card">
+            <div className="builder-store-top"><span>{store.name.slice(0,1).toUpperCase()}</span><i /><i /><i /></div>
+            <div className="builder-store-cover"><Store size={28} /></div>
+            <div className="builder-store-lines"><i /><i /><i /></div>
+            <div className="builder-store-products"><span /><span /><span /></div>
+          </div>
+          <div className="builder-ai-chip"><Sparkles size={14} /> AI-помощник</div>
+          <div className="builder-live-chip"><span /> Ваша витрина</div>
+        </div>
+      </section>
+
+      <section className="builder-progress panel">
+        <div className="builder-progress-head">
+          <div><span className="eyebrow">ПРОГРЕСС ЗАПУСКА</span><h2>{store.published ? 'Ваш магазин опубликован' : 'Подготовка магазина'}</h2></div>
+          <strong>{completed} из 4 шагов</strong>
+        </div>
+        <div className="progress-track"><span style={{ width: progress + '%' }} /></div>
+        <div className="builder-steps">
+          <div className="builder-step is-complete">
+            <span className="builder-step-index"><Check size={15} /></span>
+            <div><strong>Основная информация</strong><small>{store.name} · {store.category}</small></div>
+            <button onClick={onViewSettings}>Изменить</button>
+          </div>
+          <div className={`builder-step ${hasProducts ? 'is-complete' : 'is-current'}`}>
+            <span className="builder-step-index">{hasProducts ? <Check size={15} /> : '02'}</span>
+            <div><strong>Добавьте товары</strong><small>{hasProducts ? products.length + ' товаров в каталоге' : 'Название, фотография, цена и характеристики'}</small></div>
+            <button onClick={hasProducts ? onViewProducts : onAdd}>{hasProducts ? 'Открыть каталог' : 'Добавить товар'}</button>
+          </div>
+          <div className={`builder-step ${hasAiContent ? 'is-complete' : hasProducts ? 'is-current' : ''}`}>
+            <span className="builder-step-index">{hasAiContent ? <Check size={15} /> : '03'}</span>
+            <div><strong>Подготовьте контент с AI</strong><small>{hasAiContent ? 'Есть карточки с описанием и SEO' : 'Сгенерируйте описание и SEO-заголовок в карточке товара'}</small></div>
+            <button disabled={!hasProducts} onClick={() => firstProduct && onEdit(firstProduct)}>{hasAiContent ? 'Редактировать' : 'Открыть AI'}</button>
+          </div>
+          <div className={`builder-step ${store.published ? 'is-complete' : hasAiContent ? 'is-current' : ''}`}>
+            <span className="builder-step-index">{store.published ? <Check size={15} /> : '04'}</span>
+            <div><strong>Настройте и опубликуйте витрину</strong><small>{store.published ? 'Магазин доступен покупателям' : 'Проверьте оформление и откройте магазин по ссылке'}</small></div>
+            <button onClick={onViewSettings}>{store.published ? 'Настройки' : 'Настроить'}</button>
+          </div>
+        </div>
+      </section>
+
+      <div className="builder-bottom-grid">
+        <section className="panel builder-catalog-panel">
+          <div className="panel-heading"><div><span className="eyebrow">ВАШ АССОРТИМЕНТ</span><h2>{hasProducts ? 'Товары магазина' : 'Начните с первого товара'}</h2></div><button className="text-button" onClick={onViewProducts}>Каталог <ArrowRight size={14} /></button></div>
+          {hasProducts ? <div className="product-preview-grid">{products.slice(0, 3).map((product) => <ProductMini key={product.id} product={product} />)}</div> : <EmptyState icon={<Package size={22} />} title="Каталог пока пуст" text="Добавьте первый товар. В карточке сможете сразу подготовить описание и SEO с помощью AI." />}
+        </section>
+        <section className="panel builder-publish-panel">
+          <span className="eyebrow">ПУБЛИЧНАЯ ВИТРИНА</span>
+          <div className="builder-publish-icon"><Store size={22} /></div>
+          <h2>{store.published ? 'Магазин уже доступен' : 'Ваша витрина ждёт запуска'}</h2>
+          <p>{store.published ? 'Поделитесь ссылкой на магазин с покупателями.' : 'Сначала добавьте товары и проверьте настройки. Затем опубликуйте магазин.'}</p>
+          {store.published ? <a className="button button-light button-full" href={publicUrl} target="_blank" rel="noreferrer">Открыть витрину <ArrowUpRight size={15} /></a> : <button className="button button-primary button-full" onClick={onViewSettings}>Настроить витрину <ArrowRight size={15} /></button>}
+          <small className="muted">Без онлайн-оплаты: покупатель отправляет заявку, а владелец связывается с ним отдельно.</small>
         </section>
       </div>
-      <section className="panel">
-        <div className="panel-heading"><div><span className="eyebrow">КАТАЛОГ</span><h2>Недавно добавленные товары</h2></div><button className="text-button" onClick={onViewProducts}>Открыть каталог <ArrowRight size={14} /></button></div>
-        {products.length === 0 ? <EmptyState icon={<Package size={22} />} title="Каталог пуст" text="Добавьте первый товар — AI поможет подготовить описание." /> : <div className="product-preview-grid">{products.slice(0, 4).map((product) => <ProductMini key={product.id} product={product} />)}</div>}
-      </section>
     </div>
   )
-}
-
-function Metric({ label, value, detail, icon }: { label: string; value: string; detail: string; icon: ReactNode }) {
-  return <div className="metric-card"><div className="metric-top"><span>{label}</span><i>{icon}</i></div><strong>{value}</strong><small>{detail}</small></div>
 }
 
 function ProductsView({ products, query, setQuery, onAdd, onEdit, onDelete }: {
