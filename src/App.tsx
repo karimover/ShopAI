@@ -5,11 +5,17 @@ import {
   ShoppingBag, ShoppingCart, Sparkles, Store, Trash2, Upload, WandSparkles, X,
 } from 'lucide-react'
 
-type View = 'overview' | 'products' | 'orders' | 'settings'
+type View = 'overview' | 'builder' | 'products' | 'orders' | 'settings'
+type SitePalette = 'violet' | 'forest' | 'sand' | 'mono'
+type SiteConfig = {
+  heroTitle: string; heroSubtitle: string; aboutTitle: string; aboutText: string;
+  ctaLabel: string; productIntro: string; metaTitle: string; metaDescription: string;
+  features: string[]; palette: SitePalette; designStyle: 'minimal' | 'editorial' | 'bold'; primaryColor: string
+}
 type User = { id: string; name: string; email: string }
 type StoreData = {
   id: string; name: string; slug: string; description: string; category: string;
-  primaryColor: string; published: boolean
+  primaryColor: string; published: boolean; siteConfig?: SiteConfig | null
 }
 type Product = {
   id: string; storeId: string; name: string; category: string; description: string;
@@ -17,7 +23,7 @@ type Product = {
   createdAt: string; updatedAt: string
 }
 type PublicProduct = Pick<Product, 'id' | 'name' | 'category' | 'description' | 'seoTitle' | 'price' | 'stock' | 'imageUrl'>
-type PublicStoreData = Pick<StoreData, 'id' | 'name' | 'slug' | 'description' | 'category' | 'primaryColor'>
+type PublicStoreData = Pick<StoreData, 'id' | 'name' | 'slug' | 'description' | 'category' | 'primaryColor'> & { siteConfig?: SiteConfig | null }
 type ProductDraft = Pick<Product, 'name' | 'category' | 'description' | 'seoTitle' | 'price' | 'stock' | 'imageUrl' | 'published'>
 type OrderItem = { productId: string; name: string; price: number; quantity: number }
 type Order = {
@@ -186,7 +192,8 @@ function DashboardApp() {
         </div>
         <div className="nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
         <nav className="side-nav">
-          <NavButton active={view === 'overview'} onClick={() => setView('overview')} icon={<LayoutDashboard size={18} />}>Создание магазина</NavButton>
+          <NavButton active={view === 'overview'} onClick={() => setView('overview')} icon={<LayoutDashboard size={18} />}>Обзор</NavButton>
+          <NavButton active={view === 'builder'} onClick={() => setView('builder')} icon={<WandSparkles size={18} />}>AI-конструктор</NavButton>
           <NavButton active={view === 'products'} onClick={() => setView('products')} icon={<Package size={18} />}>Товары <span className="nav-count">{products.length}</span></NavButton>
           <NavButton active={view === 'orders'} onClick={() => setView('orders')} icon={<ShoppingBag size={18} />}>Заказы {orders.filter((order) => order.status === 'Новый').length > 0 ? <span className="nav-count accent">{orders.filter((order) => order.status === 'Новый').length}</span> : null}</NavButton>
           <NavButton active={view === 'settings'} onClick={() => setView('settings')} icon={<Settings size={18} />}>Настройки магазина</NavButton>
@@ -199,7 +206,7 @@ function DashboardApp() {
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumbs"><span>ShopAI</span><span className="crumb-divider">/</span><strong>{view === 'overview' ? 'Создание магазина' : view === 'products' ? 'Товары' : view === 'orders' ? 'Заказы' : 'Настройки'}</strong></div>
+          <div className="breadcrumbs"><span>ShopAI</span><span className="crumb-divider">/</span><strong>{view === 'overview' ? 'Обзор' : view === 'builder' ? 'AI-конструктор сайта' : view === 'products' ? 'Товары' : view === 'orders' ? 'Заказы' : 'Настройки'}</strong></div>
           <div className="topbar-actions">
             <span className={'store-state ' + (store.published ? 'is-live' : '')}><i />{store.published ? 'Магазин опубликован' : 'Черновик'}</span>
             {store.published && <a className="button button-light button-small" href={publicUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Открыть витрину</a>}
@@ -207,7 +214,8 @@ function DashboardApp() {
         </header>
 
         <div className="content-wrap">
-          {view === 'overview' && <Overview store={store} products={products} onAdd={() => { setEditing(null); setModalOpen(true) }} onEdit={(product) => { setEditing(product); setModalOpen(true) }} onViewProducts={() => setView('products')} onViewSettings={() => setView('settings')} />}
+          {view === 'overview' && <Overview store={store} products={products} onAdd={() => { setEditing(null); setModalOpen(true) }} onEdit={(product) => { setEditing(product); setModalOpen(true) }} onViewProducts={() => setView('products')} onViewSettings={() => setView('settings')} onViewBuilder={() => setView('builder')} />}
+          {view === 'builder' && <SiteBuilder store={store} products={products} onSave={updateStore} onPublish={() => updateStore({ published: !store.published })} />}
           {view === 'products' && <ProductsView products={filteredProducts} query={query} setQuery={setQuery} onAdd={() => { setEditing(null); setModalOpen(true) }} onEdit={(product) => { setEditing(product); setModalOpen(true) }} onDelete={deleteProduct} />}
           {view === 'orders' && <OrdersView orders={orders} onChangeStatus={updateOrder} />}
           {view === 'settings' && <SettingsView store={store} busy={busy} onSave={updateStore} onPublish={() => updateStore({ published: !store.published })} />}
@@ -281,9 +289,9 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (result: AuthResult)
   )
 }
 
-function Overview({ store, products, onAdd, onEdit, onViewProducts, onViewSettings }: {
+function Overview({ store, products, onAdd, onEdit, onViewProducts, onViewSettings, onViewBuilder }: {
   store: StoreData; products: Product[];
-  onAdd: () => void; onEdit: (product: Product) => void; onViewProducts: () => void; onViewSettings: () => void
+  onAdd: () => void; onEdit: (product: Product) => void; onViewProducts: () => void; onViewSettings: () => void; onViewBuilder: () => void
 }) {
   const hasProducts = products.length > 0
   const hasAiContent = products.some((product) => product.description.trim() && product.seoTitle.trim())
@@ -303,6 +311,7 @@ function Overview({ store, products, onAdd, onEdit, onViewProducts, onViewSettin
             <button className="button button-primary" onClick={hasProducts ? onViewProducts : onAdd}>
               {hasProducts ? 'Перейти к каталогу' : 'Добавить первый товар'} <ArrowRight size={16} />
             </button>
+            <button className="button button-light" onClick={onViewBuilder}><WandSparkles size={15} /> Создать сайт с AI</button>
             <span className="builder-no-code">Без программирования</span>
           </div>
         </div>
@@ -342,10 +351,10 @@ function Overview({ store, products, onAdd, onEdit, onViewProducts, onViewSettin
             <div><strong>Подготовьте контент с AI</strong><small>{hasAiContent ? 'Есть карточки с описанием и SEO' : 'Сгенерируйте описание и SEO-заголовок в карточке товара'}</small></div>
             <button disabled={!hasProducts} onClick={() => firstProduct && onEdit(firstProduct)}>{hasAiContent ? 'Редактировать' : 'Открыть AI'}</button>
           </div>
-          <div className={`builder-step ${store.published ? 'is-complete' : hasAiContent ? 'is-current' : ''}`}>
-            <span className="builder-step-index">{store.published ? <Check size={15} /> : '04'}</span>
-            <div><strong>Настройте и опубликуйте витрину</strong><small>{store.published ? 'Магазин доступен покупателям' : 'Проверьте оформление и откройте магазин по ссылке'}</small></div>
-            <button onClick={onViewSettings}>{store.published ? 'Настройки' : 'Настроить'}</button>
+          <div className={`builder-step ${store.siteConfig ? 'is-complete' : 'is-current'}`}>
+            <span className="builder-step-index">{store.siteConfig ? <Check size={15} /> : '04'}</span>
+            <div><strong>Создайте сайт с AI</strong><small>{store.siteConfig ? 'Дизайн и контент витрины готовы' : 'Сгенерируйте первый вариант сайта и настройте его'}</small></div>
+            <button onClick={onViewBuilder}>{store.siteConfig ? 'Редактировать' : 'Создать сайт'}</button>
           </div>
         </div>
       </section>
@@ -364,6 +373,209 @@ function Overview({ store, products, onAdd, onEdit, onViewProducts, onViewSettin
           <small className="muted">Без онлайн-оплаты: покупатель отправляет заявку, а владелец связывается с ним отдельно.</small>
         </section>
       </div>
+    </div>
+  )
+}
+
+
+const SITE_PALETTES: Record<SitePalette, { label: string; primary: string; background: string }> = {
+  violet: { label: 'Лавандовый', primary: '#6558d3', background: '#f2efff' },
+  forest: { label: 'Лесной', primary: '#315f4b', background: '#eef4ef' },
+  sand: { label: 'Песочный', primary: '#a66f42', background: '#f5ede3' },
+  mono: { label: 'Монохром', primary: '#292929', background: '#eeeeec' },
+}
+
+function SiteBuilder({ store, products, onSave, onPublish }: {
+  store: StoreData; products: Product[];
+  onSave: (patch: Partial<StoreData>) => Promise<void>; onPublish: () => void
+}) {
+  const [storeName, setStoreName] = useState(store.name)
+  const [niche, setNiche] = useState(store.category)
+  const [audience, setAudience] = useState('')
+  const [productsText, setProductsText] = useState(() => products.map((item) => item.name + ' — ' + item.category).join(', '))
+  const [advantage, setAdvantage] = useState('')
+  const [style, setStyle] = useState<SiteConfig['designStyle']>(store.siteConfig?.designStyle || 'minimal')
+  const [palette, setPalette] = useState<SitePalette>(store.siteConfig?.palette || 'violet')
+  const [tone, setTone] = useState('friendly')
+  const [language, setLanguage] = useState('ru')
+  const [site, setSite] = useState<SiteConfig | null>(store.siteConfig || null)
+  const [generating, setGenerating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [provider, setProvider] = useState('')
+  const [saved, setSaved] = useState(Boolean(store.siteConfig))
+
+  useEffect(() => {
+    if (store.siteConfig) {
+      setSite(store.siteConfig)
+      setPalette(store.siteConfig.palette)
+      setStyle(store.siteConfig.designStyle)
+    }
+  }, [store.siteConfig])
+
+  const generate = async (event: FormEvent) => {
+    event.preventDefault()
+    setError('')
+    setGenerating(true)
+    setSaved(false)
+    try {
+      const result = await api<{ siteConfig: SiteConfig; provider: string; model: string }>('/api/ai/storefront', {
+        method: 'POST',
+        body: JSON.stringify({ storeName, niche, audience, products: productsText, advantage, style, palette, tone, language }),
+      })
+      setSite(result.siteConfig)
+      setProvider(result.provider + ' · ' + result.model)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось создать сайт.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const updateSite = (field: keyof SiteConfig, value: string) => {
+    setSite((current) => current ? {
+      ...current,
+      [field]: value,
+      ...(field === 'palette' ? { primaryColor: SITE_PALETTES[value as SitePalette].primary } : {}),
+    } : current)
+    if (field === 'palette') setPalette(value as SitePalette)
+    if (field === 'designStyle') setStyle(value as SiteConfig['designStyle'])
+    setSaved(false)
+  }
+
+  const updateFeature = (index: number, value: string) => {
+    setSite((current) => current ? {
+      ...current,
+      features: current.features.map((feature, itemIndex) => itemIndex === index ? value : feature),
+    } : current)
+    setSaved(false)
+  }
+
+  const save = async () => {
+    if (!site) return
+    setSaving(true)
+    setError('')
+    try {
+      await onSave({
+        name: storeName.trim() || store.name,
+        category: niche.trim() || store.category,
+        description: site.heroSubtitle,
+        primaryColor: SITE_PALETTES[site.palette].primary,
+        siteConfig: { ...site, palette: site.palette, designStyle: style, primaryColor: SITE_PALETTES[site.palette].primary },
+      })
+      setSaved(true)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Не удалось сохранить сайт.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const previewProducts = products.slice(0, 3)
+  const previewStyle = {
+    '--preview-accent': SITE_PALETTES[site?.palette || palette].primary,
+    '--preview-background': SITE_PALETTES[site?.palette || palette].background,
+  } as CSSProperties
+
+  return (
+    <div className="page-stack ai-builder-page">
+      <div className="page-heading">
+        <div><span className="eyebrow">SHOPAI · AI WEBSITE BUILDER</span><h1>Создайте сайт своего магазина</h1><p>Опишите бизнес — AI подготовит структуру и тексты витрины. Результат можно отредактировать и опубликовать.</p></div>
+        {store.siteConfig && <span className="ai-state-pill"><Check size={13} /> Сайт сохранён</span>}
+      </div>
+
+      <div className="ai-builder-layout">
+        <form id="ai-site-brief" className="panel ai-brief" onSubmit={generate}>
+          <div className="panel-heading">
+            <div><span className="eyebrow">ШАГ 1 · БРИФ</span><h2>Расскажите о магазине</h2><p>Чем точнее вводные, тем полезнее первый вариант сайта.</p></div>
+            <span className="step-counter">01 / 03</span>
+          </div>
+          <label>Название магазина<input required maxLength={100} value={storeName} onChange={(event) => setStoreName(event.target.value)} placeholder="Например, Atelier Home" /></label>
+          <div className="ai-filter-grid">
+            <label>Ниша<input required maxLength={100} value={niche} onChange={(event) => setNiche(event.target.value)} placeholder="Одежда, декор, косметика..." /></label>
+            <label>Аудитория<input maxLength={240} value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Кому продаёте?" /></label>
+          </div>
+          <label>Что продаёте?<textarea required rows={3} maxLength={1000} value={productsText} onChange={(event) => setProductsText(event.target.value)} placeholder="Категории и примеры товаров" /></label>
+          <label>Чем магазин отличается?<textarea rows={2} maxLength={320} value={advantage} onChange={(event) => setAdvantage(event.target.value)} placeholder="Например: локальный бренд, ручная работа..." /></label>
+          <div className="ai-filter-grid">
+            <label>Характер сайта<select value={style} onChange={(event) => { setStyle(event.target.value as SiteConfig['designStyle']); if (site) updateSite('designStyle', event.target.value) }}><option value="minimal">Минимализм</option><option value="editorial">Редакционный</option><option value="bold">Смелый</option></select></label>
+            <label>Тон общения<select value={tone} onChange={(event) => setTone(event.target.value)}><option value="friendly">Дружелюбный</option><option value="premium">Премиальный</option><option value="expert">Экспертный</option></select></label>
+          </div>
+          <div className="palette-field">
+            <span className="field-caption">Цветовая палитра</span>
+            <div className="palette-options">
+              {(Object.keys(SITE_PALETTES) as SitePalette[]).map((key) => <button type="button" key={key} className={'palette-option ' + (palette === key ? 'selected' : '')} onClick={() => { setPalette(key); if (site) updateSite('palette', key) }}><i style={{ background: SITE_PALETTES[key].primary }} />{SITE_PALETTES[key].label}</button>)}
+            </div>
+          </div>
+          <label>Язык сайта<select value={language} onChange={(event) => setLanguage(event.target.value)}><option value="ru">Русский</option><option value="en">English</option></select></label>
+          {error && <div className="inline-error"><CircleAlert size={15} />{error}</div>}
+          <button className="button button-primary button-full ai-generate-button" disabled={generating || !productsText.trim()}><WandSparkles size={16} />{generating ? 'AI создаёт сайт…' : site ? 'Сгенерировать заново' : 'Сгенерировать сайт'}</button>
+          <p className="ai-provider-note">Cloudflare Workers AI · Генерация занимает до минуты. Тексты можно проверить и изменить перед публикацией.</p>
+        </form>
+
+        <div className="ai-result-column">
+          <section className="panel ai-result-panel">
+            <div className="panel-heading"><div><span className="eyebrow">ШАГ 2 · ПРЕДПРОСМОТР</span><h2>Ваша будущая витрина</h2></div>{site && <span className="step-counter">LIVE PREVIEW</span>}</div>
+            {site ? (
+              <>
+                <SitePreview brand={storeName} niche={niche} site={site} products={previewProducts} />
+                <div className="ai-result-actions">
+                  <button className="button button-light" type="button" onClick={() => { const node = document.getElementById('ai-site-brief'); node?.requestSubmit() }} disabled={generating}>Повторить генерацию</button>
+                  <button className="button button-primary" type="button" onClick={() => void save()} disabled={saving}>{saving ? 'Сохраняем…' : saved ? 'Сайт сохранён' : 'Сохранить сайт'}<Check size={15} /></button>
+                </div>
+                {provider && <small className="ai-provider-meta">Модель: {provider}</small>}
+                {saved && <div className="ai-notice"><Check size={14} /> Конфигурация сохранена в магазине. Она появится на публичной витрине.</div>}
+              </>
+            ) : (
+              <div className="ai-empty-preview">
+                <div className="ai-empty-art"><Store size={34} /><Sparkles size={15} /></div>
+                <strong>Здесь появится ваш сайт</strong>
+                <p>Заполните бриф слева и запустите генерацию. Справа появится первый вариант главной страницы.</p>
+              </div>
+            )}
+          </section>
+
+          {site && <section className="panel ai-copy-editor">
+            <div className="panel-heading"><div><span className="eyebrow">ШАГ 3 · РЕДАКТИРОВАНИЕ</span><h2>Настройте содержание</h2><p>Изменения сразу отображаются в предпросмотре.</p></div></div>
+            <label>Заголовок первого экрана<input value={site.heroTitle} onChange={(event) => updateSite('heroTitle', event.target.value)} /></label>
+            <label>Подзаголовок<textarea rows={3} value={site.heroSubtitle} onChange={(event) => updateSite('heroSubtitle', event.target.value)} /></label>
+            <div className="ai-filter-grid">
+              <label>Заголовок о бренде<input value={site.aboutTitle} onChange={(event) => updateSite('aboutTitle', event.target.value)} /></label>
+              <label>Кнопка действия<input value={site.ctaLabel} onChange={(event) => updateSite('ctaLabel', event.target.value)} /></label>
+            </div>
+            <label>Текст о магазине<textarea rows={3} value={site.aboutText} onChange={(event) => updateSite('aboutText', event.target.value)} /></label>
+            <label>Заголовок каталога<input value={site.productIntro} onChange={(event) => updateSite('productIntro', event.target.value)} /></label>
+            <div className="ai-filter-grid">
+              {site.features.slice(0, 3).map((feature, index) => <label key={index}>Преимущество {index + 1}<input value={feature} onChange={(event) => updateFeature(index, event.target.value)} /></label>)}
+            </div>
+            <div className="ai-result-actions">
+              <button className="button button-primary" type="button" onClick={() => void save()} disabled={saving || saved}>{saving ? 'Сохраняем…' : 'Сохранить изменения'}<Check size={15} /></button>
+              <button className="button button-light" type="button" onClick={() => setSite(store.siteConfig || null)} disabled={!store.siteConfig}>Сбросить</button>
+            </div>
+          </section>}
+          {site && <section className="panel ai-copy-editor">
+            <div className="panel-heading"><div><span className="eyebrow">ПУБЛИКАЦИЯ</span><h2>{store.published ? 'Сайт опубликован' : 'Готовы открыть магазин?'}</h2><p>{store.published ? 'Витрина доступна покупателям.' : 'Сохраните сайт и опубликуйте его после добавления хотя бы одного товара.'}</p></div></div>
+            {store.published && <a className="button button-light button-full" href={'/shop/' + store.slug} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Открыть сайт</a>}
+            <button className="button button-primary button-full" type="button" onClick={onPublish} disabled={!store.published && !products.some((product) => product.published && product.stock > 0)}>{store.published ? 'Снять с публикации' : 'Опубликовать сайт'}<ArrowUpRight size={15} /></button>
+            {!products.some((product) => product.published && product.stock > 0) && !store.published && <p className="ai-provider-note">Сначала добавьте опубликованный товар с остатком больше нуля.</p>}
+          </section>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SitePreview({ brand, niche, site, products }: {
+  brand: string; niche: string; site: SiteConfig; products: Product[]
+}) {
+  return (
+    <div className={'site-preview theme-' + site.designStyle} style={{ '--preview-accent': site.primaryColor } as CSSProperties}>
+      <div className="site-preview-browser"><i /><i /><i /><span>{brand.toLowerCase().replace(/\s+/g, '')}.shop</span></div>
+      <header className="site-preview-header"><strong>{brand}</strong><span>{niche}</span><span>КАТАЛОГ　 О БРЕНДЕ</span></header>
+      <section className="site-preview-hero"><span>{brand}</span><h3>{site.heroTitle}</h3><p>{site.heroSubtitle}</p><b>{site.ctaLabel}</b></section>
+      {site.features.length > 0 && <div className="site-preview-features">{site.features.slice(0, 3).map((feature, index) => <span key={index}>{feature}</span>)}</div>}
+      <section className="site-preview-catalog"><small>КОЛЛЕКЦИЯ</small><h4>{site.productIntro}</h4><div>{products.length ? products.map((product) => <article key={product.id}><div>{product.imageUrl ? <img src={product.imageUrl} alt="" /> : <Package size={20} />}</div><strong>{product.name}</strong><span>{money(product.price)}</span></article>) : [1, 2, 3].map((item) => <article key={item}><div><Package size={20} /></div><strong>Ваш товар</strong><span>Цена появится здесь</span></article>)}</div></section>
+      <section className="site-preview-about"><small>О БРЕНДЕ</small><h4>{site.aboutTitle}</h4><p>{site.aboutText}</p></section>
     </div>
   )
 }
@@ -556,6 +768,17 @@ function PublicStore({ slug }: { slug: string }) {
     }).finally(() => setLoading(false))
   }, [slug])
 
+  useEffect(() => {
+    if (!data) return
+    document.title = data.store.siteConfig?.metaTitle || data.store.name
+    const description = data.store.siteConfig?.metaDescription
+    if (description) {
+      let meta = document.querySelector('meta[name="description"]')
+      if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'description'); document.head.appendChild(meta) }
+      meta.setAttribute('content', description)
+    }
+  }, [data])
+
   const cartItems = useMemo(() => data?.products.filter((product) => cart[product.id]) ?? [], [data, cart])
   const totalQuantity = Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)
   const total = cartItems.reduce((sum, product) => sum + product.price * cart[product.id], 0)
@@ -593,10 +816,12 @@ function PublicStore({ slug }: { slug: string }) {
   if (!data) return <div className="store-loading"><CircleAlert size={22} /><strong>Магазин недоступен</strong><span>{error}</span><a href="/">Перейти в ShopAI</a></div>
 
   return (
-    <div className="public-store" style={{ '--store-accent': data.store.primaryColor } as CSSProperties}>
+    <div className={'public-store ' + (data.store.siteConfig ? 'public-site-' + data.store.siteConfig.designStyle : '')} style={{ '--store-accent': data.store.siteConfig?.primaryColor || data.store.primaryColor } as CSSProperties}>
       <header className="public-header"><a className="public-brand" href="#top">{data.store.name}</a><span>{data.store.category}</span><button className="button button-light" onClick={() => setCheckoutOpen(true)} disabled={!totalQuantity}><ShoppingCart size={16} /> Корзина <b>{totalQuantity}</b></button></header>
-      <section className="store-hero" id="top"><span className="eyebrow">ИНТЕРНЕТ-МАГАЗИН</span><h1>{data.store.name}</h1><p>{data.store.description}</p><a href="#catalog" className="button button-dark">Перейти к товарам <ArrowRight size={16} /></a></section>
-      <main className="store-catalog" id="catalog"><div className="store-section-heading"><div><span className="eyebrow">КАТАЛОГ</span><h2>Выберите то, что вам нравится</h2></div><span>{data.products.length} товаров</span></div>
+      <section className="store-hero" id="top"><span className="eyebrow">{data.store.siteConfig ? data.store.name : 'ИНТЕРНЕТ-МАГАЗИН'}</span><h1>{data.store.siteConfig?.heroTitle || data.store.name}</h1><p>{data.store.siteConfig?.heroSubtitle || data.store.description}</p><a href="#catalog" className="button button-dark">{data.store.siteConfig?.ctaLabel || 'Перейти к товарам'} <ArrowRight size={16} /></a></section>
+      {data.store.siteConfig?.features?.length ? <section className="store-feature-list">{data.store.siteConfig.features.map((feature, index) => <span key={index}>{feature}</span>)}</section> : null}
+      {data.store.siteConfig?.aboutText ? <section className="store-about"><span className="eyebrow">О БРЕНДЕ</span><h2>{data.store.siteConfig.aboutTitle}</h2><p>{data.store.siteConfig.aboutText}</p></section> : null}
+      <main className="store-catalog" id="catalog"><div className="store-section-heading"><div><span className="eyebrow">КАТАЛОГ</span><h2>{data.store.siteConfig?.productIntro || 'Выберите то, что вам нравится'}</h2></div><span>{data.products.length} товаров</span></div>
         {data.products.length === 0 ? <EmptyState icon={<Package size={24} />} title="Каталог скоро появится" text="Владелец магазина пока не добавил доступные товары." /> : <div className="store-product-grid">{data.products.map((product) => <article className="store-product" key={product.id}><div className="store-product-image">{product.imageUrl ? <img src={product.imageUrl} alt={product.name} /> : <Package size={30} />}</div><div className="store-product-info"><span className="eyebrow">{product.category}</span><h3>{product.name}</h3><p>{product.description}</p><div className="store-product-bottom"><strong>{money(product.price)}</strong><button onClick={() => setQuantity(product.id, (cart[product.id] || 0) + 1)} disabled={cart[product.id] >= product.stock}>{cart[product.id] ? 'Добавить ещё' : 'В корзину'} <Plus size={14} /></button></div></div></article>)}</div>}
       </main>
       <footer className="public-footer"><span>{data.store.name}</span><span>Создано с помощью ShopAI</span></footer>
