@@ -267,7 +267,7 @@ export async function createApp(options = {}) {
   let writeQueue = Promise.resolve()
   const persist = () => {
     const snapshot = JSON.stringify(db)
-    writeQueue = writeQueue.then(async () => {
+    writeQueue = writeQueue.catch(() => undefined).then(async () => {
       if (persistence) {
         const nextRevision = await persistence.save(snapshot, persistenceRevision)
         persistenceRevision = Number.isInteger(nextRevision) ? nextRevision : persistenceRevision + 1
