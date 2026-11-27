@@ -637,8 +637,8 @@ function ProductForm({ product, busy, onClose, onSave }: {
       setError('Выберите изображение PNG, JPEG или WebP.')
       return
     }
-    if (file.size > 4 * 1024 * 1024) {
-      setError('Размер изображения не должен превышать 4 МБ.')
+    if (file.size > 1.7 * 1024 * 1024) {
+      setError('Размер изображения не должен превышать 1,7 МБ.')
       return
     }
     setError('')
@@ -672,7 +672,7 @@ function ProductForm({ product, busy, onClose, onSave }: {
           <div className="form-row"><label>Категория<input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="Декор" /></label><label>Цена, ₽<input type="number" min="1" step="1" required value={draft.price || ''} onChange={(event) => setDraft({ ...draft, price: Number(event.target.value) })} /></label><label>Остаток, шт.<input type="number" min="0" step="1" required value={draft.stock} onChange={(event) => setDraft({ ...draft, stock: Number(event.target.value) })} /></label></div>
           <label>Описание товара<textarea rows={5} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Описание можно написать самостоятельно или подготовить с AI." /></label>
           <label>SEO-заголовок<input maxLength={180} value={draft.seoTitle} onChange={(event) => setDraft({ ...draft, seoTitle: event.target.value })} placeholder="Заголовок для поисковых систем" /></label>
-          <label className="image-upload"><span className="upload-preview">{draft.imageUrl ? <img src={draft.imageUrl} alt="Предпросмотр товара" /> : <ImagePlus size={22} />}</span><span><strong>Фотография товара</strong><small>PNG, JPEG или WebP · до 4 МБ</small></span><span className="button button-light button-small"><Upload size={14} /> Выбрать</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void uploadImage(event.target.files?.[0])} /></label>
+          <label className="image-upload"><span className="upload-preview">{draft.imageUrl ? <img src={draft.imageUrl} alt="Предпросмотр товара" /> : <ImagePlus size={22} />}</span><span><strong>Фотография товара</strong><small>PNG, JPEG или WebP · до 1,7 МБ</small></span><span className="button button-light button-small"><Upload size={14} /> Выбрать</span><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void uploadImage(event.target.files?.[0])} /></label>
           <label className="switch-row"><input type="checkbox" checked={draft.published} onChange={(event) => setDraft({ ...draft, published: event.target.checked })} /><span><strong>Показывать товар в витрине</strong><small>Товар будет виден покупателям, если магазин опубликован.</small></span></label>
         </div>
         <aside className="ai-panel">
