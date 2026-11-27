@@ -564,7 +564,7 @@ function SitePreview({ brand, niche, site, products }: {
   brand: string; niche: string; site: SiteConfig; products: Product[]
 }) {
   return (
-    <div className={'site-preview theme-' + site.designStyle} style={{ '--preview-accent': site.primaryColor } as CSSProperties}>
+    <div className={'site-preview theme-' + site.designStyle} style={{ '--preview-accent': site.primaryColor, '--preview-background': SITE_PALETTES[site.palette].background } as CSSProperties}>
       <div className="site-preview-browser"><i /><i /><i /><span>{brand.toLowerCase().replace(/\s+/g, '')}.shop</span></div>
       <header className="site-preview-header"><strong>{brand}</strong><span>{niche}</span><span>КАТАЛОГ　 О БРЕНДЕ</span></header>
       <section className="site-preview-hero"><span>{brand}</span><h3>{site.heroTitle}</h3><p>{site.heroSubtitle}</p><b>{site.ctaLabel}</b></section>
@@ -811,7 +811,7 @@ function PublicStore({ slug }: { slug: string }) {
   if (!data) return <div className="store-loading"><CircleAlert size={22} /><strong>Магазин недоступен</strong><span>{error}</span><a href="/">Перейти в ShopAI</a></div>
 
   return (
-    <div className={'public-store ' + (data.store.siteConfig ? 'public-site-' + data.store.siteConfig.designStyle : '')} style={{ '--store-accent': data.store.siteConfig?.primaryColor || data.store.primaryColor } as CSSProperties}>
+    <div className={'public-store ' + (data.store.siteConfig ? 'public-site-' + data.store.siteConfig.designStyle + ' public-palette-' + data.store.siteConfig.palette : '')} style={{ '--store-accent': data.store.siteConfig?.primaryColor || data.store.primaryColor, '--store-surface': SITE_PALETTES[data.store.siteConfig?.palette || 'violet'].background } as CSSProperties}>
       <header className="public-header"><a className="public-brand" href="#top">{data.store.name}</a><span>{data.store.category}</span><button className="button button-light" onClick={() => setCheckoutOpen(true)} disabled={!totalQuantity}><ShoppingCart size={16} /> Корзина <b>{totalQuantity}</b></button></header>
       <section className="store-hero" id="top"><span className="eyebrow">{data.store.siteConfig ? data.store.name : 'ИНТЕРНЕТ-МАГАЗИН'}</span><h1>{data.store.siteConfig?.heroTitle || data.store.name}</h1><p>{data.store.siteConfig?.heroSubtitle || data.store.description}</p><a href="#catalog" className="button button-dark">{data.store.siteConfig?.ctaLabel || 'Перейти к товарам'} <ArrowRight size={16} /></a></section>
       {data.store.siteConfig?.features?.length ? <section className="store-feature-list">{data.store.siteConfig.features.map((feature, index) => <span key={index}>{feature}</span>)}</section> : null}
