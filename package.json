@@ -16,7 +16,8 @@
     "cf:login": "npx wrangler@latest login",
     "cf:dev": "npm run build && npx wrangler@latest dev",
     "cf:db:create": "npx wrangler@latest d1 create shopai-db --binding DB",
-    "cf:db:migrate": "npx wrangler@latest d1 migrations apply shopai-db --remote"
+    "cf:db:migrate": "npx wrangler@latest d1 migrations apply shopai-db --remote",
+    "postinstall": "node scripts/fix-cloudflare-iconv-lite.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",
