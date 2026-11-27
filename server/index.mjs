@@ -45,13 +45,13 @@ function parseCookies(header = '') {
   }))
 }
 
-function setSessionCookie(res, token) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
+function setSessionCookie(res, token, forceSecure = false) {
+  const secure = (forceSecure || process.env.NODE_ENV === 'production') ? '; Secure' : ''
   res.setHeader('Set-Cookie', 'shopai_session=' + encodeURIComponent(token) + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + Math.floor(SESSION_TTL_MS / 1000) + secure)
 }
 
-function clearSessionCookie(res) {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : ''
+function clearSessionCookie(res, forceSecure = false) {
+  const secure = (forceSecure || process.env.NODE_ENV === 'production') ? '; Secure' : ''
   res.setHeader('Set-Cookie', 'shopai_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' + secure)
 }
 
@@ -105,12 +105,12 @@ function publicStore(store, products) {
 
 
 
-async function generateCloudflareJson(prompt, maxOutputTokens = 1200) {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN
+async function generateCloudflareJson(prompt, maxOutputTokens = 1200, runtimeConfig = process.env) {
+  const accountId = runtimeConfig.CLOUDFLARE_ACCOUNT_ID
+  const apiToken = runtimeConfig.CLOUDFLARE_API_TOKEN
   if (!accountId || !apiToken) throw new Error('CLOUDFLARE_CONFIG_MISSING')
 
-  const model = process.env.CLOUDFLARE_AI_MODEL || '@cf/google/gemma-4-26b-a4b-it'
+  const model = runtimeConfig.CLOUDFLARE_AI_MODEL || '@cf/google/gemma-4-26b-a4b-it'
   const url = 'https://api.cloudflare.com/client/v4/accounts/' + encodeURIComponent(accountId) + '/ai/v1/chat/completions'
   const response = await fetch(url, {
     method: 'POST',
@@ -231,27 +231,48 @@ function makeDemoCopy({ name, category, details, tone }) {
 }
 
 export async function createApp(options = {}) {
+  const runtimeConfig = options.runtimeConfig || process.env
+  const persistence = options.persistence || null
+  const uploadStorage = options.uploadStorage || null
+  const secureCookies = options.secureCookies ?? runtimeConfig.NODE_ENV === 'production'
   const dataFile = options.dataFile || process.env.SHOPAI_DATA_FILE || path.join(projectRoot, 'data', 'shopai.json')
   const uploadsDir = options.uploadsDir || path.join(projectRoot, 'uploads')
-  await fs.mkdir(path.dirname(dataFile), { recursive: true })
-  await fs.mkdir(uploadsDir, { recursive: true })
+
+  const normalizeDatabase = (value) => {
+    const normalized = value && typeof value === 'object' ? value : emptyDatabase()
+    for (const key of Object.keys(emptyDatabase())) {
+      if (!Array.isArray(normalized[key])) normalized[key] = []
+    }
+    return normalized
+  }
 
   let db
-  try {
-    db = JSON.parse(await fs.readFile(dataFile, 'utf8'))
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error
-    db = emptyDatabase()
-    await fs.writeFile(dataFile, JSON.stringify(db, null, 2))
-  }
-  for (const key of Object.keys(emptyDatabase())) {
-    if (!Array.isArray(db[key])) db[key] = []
+  let persistenceRevision = 0
+  if (persistence) {
+    const stored = await persistence.load()
+    db = normalizeDatabase(stored?.data)
+    persistenceRevision = Number.isInteger(stored?.revision) ? stored.revision : 0
+  } else {
+    await fs.mkdir(path.dirname(dataFile), { recursive: true })
+    if (!uploadStorage) await fs.mkdir(uploadsDir, { recursive: true })
+    try {
+      db = normalizeDatabase(JSON.parse(await fs.readFile(dataFile, 'utf8')))
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error
+      db = emptyDatabase()
+      await fs.writeFile(dataFile, JSON.stringify(db, null, 2))
+    }
   }
 
   let writeQueue = Promise.resolve()
   const persist = () => {
-    const snapshot = JSON.stringify(db, null, 2)
+    const snapshot = JSON.stringify(db)
     writeQueue = writeQueue.then(async () => {
+      if (persistence) {
+        const nextRevision = await persistence.save(snapshot, persistenceRevision)
+        persistenceRevision = Number.isInteger(nextRevision) ? nextRevision : persistenceRevision + 1
+        return
+      }
       const temporaryFile = dataFile + '.tmp'
       await fs.writeFile(temporaryFile, snapshot, 'utf8')
       await fs.rename(temporaryFile, dataFile)
@@ -262,7 +283,51 @@ export async function createApp(options = {}) {
   const app = express()
   app.disable('x-powered-by')
   app.use(express.json({ limit: '8mb' }))
-  app.use('/uploads', express.static(uploadsDir, { fallthrough: false, maxAge: '1d' }))
+
+  // D1-backed requests are reloaded from durable storage and serialized per isolate.
+  // The D1 revision check prevents silent overwrites across separate Worker isolates.
+  if (persistence) {
+    let requestQueue = Promise.resolve()
+    app.use((req, res, next) => {
+      const previousRequest = requestQueue
+      let releaseRequest
+      requestQueue = new Promise((resolve) => { releaseRequest = resolve })
+      let released = false
+      const finishRequest = () => {
+        if (released) return
+        released = true
+        releaseRequest()
+      }
+      res.once('finish', finishRequest)
+      res.once('close', finishRequest)
+      previousRequest.then(async () => {
+        try {
+          const stored = await persistence.load()
+          db = normalizeDatabase(stored?.data)
+          persistenceRevision = Number.isInteger(stored?.revision) ? stored.revision : 0
+          next()
+        } catch (error) {
+          finishRequest()
+          next(error)
+        }
+      })
+    })
+  }
+
+  if (uploadStorage) {
+    app.get('/uploads/:filename', route(async (req, res) => {
+      const filename = cleanText(req.params.filename, 80)
+      if (!/^[a-f0-9]{36}\\.(png|jpg|webp)$/.test(filename)) return res.status(404).end()
+      const file = await uploadStorage.get(filename)
+      if (!file) return res.status(404).end()
+      res.setHeader('Content-Type', file.contentType || 'application/octet-stream')
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+      res.setHeader('X-Content-Type-Options', 'nosniff')
+      res.status(200).end(Buffer.from(file.data))
+    }))
+  } else {
+    app.use('/uploads', express.static(uploadsDir, { fallthrough: false, maxAge: '1d' }))
+  }
 
   const requireAuth = (req, res, next) => {
     const token = parseCookies(req.headers.cookie).shopai_session
@@ -311,7 +376,7 @@ export async function createApp(options = {}) {
     db.stores.push(store)
     db.sessions.push({ tokenHash: sha256(token), userId: user.id, expiresAt: Date.now() + SESSION_TTL_MS })
     await persist()
-    setSessionCookie(res, token)
+    setSessionCookie(res, token, secureCookies)
     res.status(201).json({ user: safeUser(user), store })
   }))
 
@@ -326,14 +391,14 @@ export async function createApp(options = {}) {
     db.sessions = db.sessions.filter((session) => session.userId !== user.id)
     db.sessions.push({ tokenHash: sha256(token), userId: user.id, expiresAt: Date.now() + SESSION_TTL_MS })
     await persist()
-    setSessionCookie(res, token)
+    setSessionCookie(res, token, secureCookies)
     res.json({ user: safeUser(user), store: getOwnedStore(user.id) || null })
   }))
 
   app.post('/api/auth/logout', requireAuth, route(async (req, res) => {
     db.sessions = db.sessions.filter((session) => session.tokenHash !== req.sessionHash)
     await persist()
-    clearSessionCookie(res)
+    clearSessionCookie(res, secureCookies)
     res.json({ success: true })
   }))
 
@@ -442,7 +507,12 @@ export async function createApp(options = {}) {
     if (!buffer.length || buffer.length > IMAGE_LIMIT_BYTES) return res.status(413).json({ error: 'Размер изображения должен быть не более 4 МБ.' })
     const extension = match[1] === 'jpeg' ? 'jpg' : match[1]
     const filename = crypto.randomBytes(18).toString('hex') + '.' + extension
-    await fs.writeFile(path.join(uploadsDir, filename), buffer, { flag: 'wx' })
+    if (uploadStorage) {
+      const contentType = match[1] === 'jpeg' ? 'image/jpeg' : 'image/' + match[1]
+      await uploadStorage.put(filename, buffer, contentType)
+    } else {
+      await fs.writeFile(path.join(uploadsDir, filename), buffer, { flag: 'wx' })
+    }
     res.status(201).json({ imageUrl: '/uploads/' + filename })
   }))
 
@@ -453,7 +523,7 @@ export async function createApp(options = {}) {
     const tone = cleanText(req.body.tone, 40) || 'Дружелюбный'
     if (!name || !details) return res.status(400).json({ error: 'Укажите название и характеристики товара.' })
 
-    const apiConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN)
+    const apiConfigured = Boolean(runtimeConfig.CLOUDFLARE_ACCOUNT_ID && runtimeConfig.CLOUDFLARE_API_TOKEN)
     if (!apiConfigured) {
       return res.json({ ...makeDemoCopy({ name, category, details, tone }), message: 'Демонстрационный режим. Для реальной генерации добавьте CLOUDFLARE_ACCOUNT_ID и CLOUDFLARE_API_TOKEN в .env.' })
     }
@@ -465,7 +535,7 @@ export async function createApp(options = {}) {
       'Верни только JSON с двумя строковыми полями: description и seoTitle.',
     ].join('\n')
     try {
-      const result = await generateCloudflareJson(prompt, 900)
+      const result = await generateCloudflareJson(prompt, 900, runtimeConfig)
       const description = cleanText(result.data.description, 3000)
       const seoTitle = cleanText(result.data.seoTitle, 180)
       if (!description || !seoTitle) return res.status(502).json({ error: 'Cloudflare Workers AI не вернул описание и SEO-заголовок.' })
@@ -496,7 +566,7 @@ export async function createApp(options = {}) {
       language: req.body.language === 'en' ? 'English' : 'Russian',
     }
     if (!brief.products) return res.status(400).json({ error: 'Опишите товары, которые будет продавать магазин.' })
-    const apiConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN)
+    const apiConfigured = Boolean(runtimeConfig.CLOUDFLARE_ACCOUNT_ID && runtimeConfig.CLOUDFLARE_API_TOKEN)
     if (!apiConfigured) {
       return res.status(503).json({ error: 'Cloudflare Workers AI не подключён. Добавьте CLOUDFLARE_ACCOUNT_ID и CLOUDFLARE_API_TOKEN в файл .env и перезапустите сервер.' })
     }
@@ -526,7 +596,7 @@ export async function createApp(options = {}) {
       'Create landing-page copy and SEO fields. Avoid generic filler.',
     ].join('\n')
     try {
-      const result = await generateCloudflareJson(prompt, 2200)
+      const result = await generateCloudflareJson(prompt, 2200, runtimeConfig)
       const config = safeSiteConfig({ ...result.data, palette: brief.palette, designStyle: brief.style })
       if (!hasUsableSiteCopy(config)) {
         console.warn('Cloudflare storefront generation returned placeholder or incomplete copy')
@@ -635,21 +705,26 @@ export async function createApp(options = {}) {
     res.status(201).json({ order: { id: order.id, total: order.total, status: order.status } })
   }))
 
-  const distDir = path.join(projectRoot, 'dist')
-  try {
-    await fs.access(distDir)
-    app.use(express.static(distDir))
-    app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api/')) return next()
-      res.sendFile(path.join(distDir, 'index.html'))
-    })
-  } catch {
-    // In development Vite serves the frontend and proxies /api and /uploads to this server.
+  if (!options.assetsServedExternally) {
+    const distDir = path.join(projectRoot, 'dist')
+    try {
+      await fs.access(distDir)
+      app.use(express.static(distDir))
+      app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) return next()
+        res.sendFile(path.join(distDir, 'index.html'))
+      })
+    } catch {
+      // In development Vite serves the frontend and proxies /api and /uploads to this server.
+    }
   }
 
   app.use((error, _req, res, _next) => {
     console.error(error)
     if (res.headersSent) return
+    if (error.message === 'DB_WRITE_CONFLICT') {
+      return res.status(409).json({ error: 'Данные магазина одновременно изменились в другом запросе. Обновите страницу и повторите действие.' })
+    }
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
       return res.status(504).json({ error: 'Превышено время ожидания внешнего сервиса.' })
     }
