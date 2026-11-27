@@ -107,7 +107,7 @@ function publicStore(store, products) {
 
 async function generateCloudflareJson(prompt, maxOutputTokens = 1200, runtimeConfig = process.env) {
   const accountId = runtimeConfig.CLOUDFLARE_ACCOUNT_ID
-  const apiToken = runtimeConfig.CLOUDFLARE_API_TOKEN
+  const apiToken = runtimeConfig.SHOPAI_CLOUDFLARE_API_TOKEN || runtimeConfig.CLOUDFLARE_API_TOKEN
   if (!accountId || !apiToken) throw new Error('CLOUDFLARE_CONFIG_MISSING')
 
   const model = runtimeConfig.CLOUDFLARE_AI_MODEL || '@cf/google/gemma-4-26b-a4b-it'
@@ -523,7 +523,7 @@ export async function createApp(options = {}) {
     const tone = cleanText(req.body.tone, 40) || 'Дружелюбный'
     if (!name || !details) return res.status(400).json({ error: 'Укажите название и характеристики товара.' })
 
-    const apiConfigured = Boolean(runtimeConfig.CLOUDFLARE_ACCOUNT_ID && runtimeConfig.CLOUDFLARE_API_TOKEN)
+    const apiConfigured = Boolean(runtimeConfig.CLOUDFLARE_ACCOUNT_ID && (runtimeConfig.SHOPAI_CLOUDFLARE_API_TOKEN || runtimeConfig.CLOUDFLARE_API_TOKEN))
     if (!apiConfigured) {
       return res.json({ ...makeDemoCopy({ name, category, details, tone }), message: 'Демонстрационный режим. Для реальной генерации добавьте CLOUDFLARE_ACCOUNT_ID и CLOUDFLARE_API_TOKEN в .env.' })
     }
@@ -566,7 +566,7 @@ export async function createApp(options = {}) {
       language: req.body.language === 'en' ? 'English' : 'Russian',
     }
     if (!brief.products) return res.status(400).json({ error: 'Опишите товары, которые будет продавать магазин.' })
-    const apiConfigured = Boolean(runtimeConfig.CLOUDFLARE_ACCOUNT_ID && runtimeConfig.CLOUDFLARE_API_TOKEN)
+    const apiConfigured = Boolean(runtimeConfig.CLOUDFLARE_ACCOUNT_ID && (runtimeConfig.SHOPAI_CLOUDFLARE_API_TOKEN || runtimeConfig.CLOUDFLARE_API_TOKEN))
     if (!apiConfigured) {
       return res.status(503).json({ error: 'Cloudflare Workers AI не подключён. Добавьте CLOUDFLARE_ACCOUNT_ID и CLOUDFLARE_API_TOKEN в файл .env и перезапустите сервер.' })
     }
