@@ -540,3 +540,6 @@ input, textarea, select { outline: 0; }
 .public-palette-forest:not(.public-site-bold) .store-hero { background:var(--store-surface,linear-gradient(125deg,#eef4ef,#dde9df)); }
 .public-palette-sand:not(.public-site-bold) .store-hero { background:var(--store-surface,linear-gradient(125deg,#f5ede3,#ead8c3)); }
 .public-palette-mono:not(.public-site-bold) .store-hero { background:var(--store-surface,linear-gradient(125deg,#f0f0ed,#e1e1de)); }
+
+.crumb-brand { display:inline-flex;align-items:center;gap:6px;color:#777487;font-weight:700; }
+.crumb-brand img { width:19px;height:19px;display:block; }
