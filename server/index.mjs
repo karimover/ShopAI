@@ -104,6 +104,41 @@ function publicStore(store, products) {
 }
 
 
+
+async function generateGeminiJson(prompt, maxOutputTokens = 1200) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.SHOPAI_AI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_KEY_MISSING')
+  const model = process.env.GEMINI_MODEL || process.env.SHOPAI_AI_MODEL || 'gemini-3.1-flash-lite'
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent'
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.55, maxOutputTokens, responseMimeType: 'application/json' },
+    }),
+    signal: AbortSignal.timeout(45000),
+  })
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    console.error('Gemini API error:', response.status, detail.slice(0, 500))
+    const error = new Error(response.status === 429 ? 'GEMINI_RATE_LIMIT' : 'GEMINI_PROVIDER_ERROR')
+    error.status = response.status
+    throw error
+  }
+  const payload = await response.json()
+  const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim()
+  if (!raw) throw new Error('GEMINI_EMPTY_RESPONSE')
+  try { return { data: JSON.parse(raw), model } } catch {
+    const start = raw.indexOf('{')
+    const end = raw.lastIndexOf('}')
+    if (start >= 0 && end > start) {
+      try { return { data: JSON.parse(raw.slice(start, end + 1)), model } } catch {}
+    }
+    throw new Error('GEMINI_INVALID_JSON')
+  }
+}
+
 const SITE_PALETTES = {
   violet: { primary: '#6558d3', background: '#f6f4ff' },
   forest: { primary: '#315f4b', background: '#f1f5f0' },
@@ -366,11 +401,9 @@ export async function createApp(options = {}) {
     const tone = cleanText(req.body.tone, 40) || 'Дружелюбный'
     if (!name || !details) return res.status(400).json({ error: 'Укажите название и характеристики товара.' })
 
-    const apiKey = process.env.SHOPAI_AI_API_KEY
-    const apiUrl = process.env.SHOPAI_AI_API_URL
-    const model = process.env.SHOPAI_AI_MODEL
-    if (!apiKey || !apiUrl || !model) {
-      return res.json({ ...makeDemoCopy({ name, category, details, tone }), message: 'Демонстрационный режим. Для реальной генерации настройте серверные переменные SHOPAI_AI_API_KEY, SHOPAI_AI_API_URL и SHOPAI_AI_MODEL.' })
+    const apiKey = process.env.GEMINI_API_KEY || process.env.SHOPAI_AI_API_KEY
+    if (!apiKey) {
+      return res.json({ ...makeDemoCopy({ name, category, details, tone }), message: 'Демонстрационный режим. Для реальной генерации добавьте GEMINI_API_KEY в .env.' })
     }
 
     const prompt = [
@@ -378,31 +411,18 @@ export async function createApp(options = {}) {
       'Используй только факты из исходных данных. Не выдумывай материалы, размеры, гарантию, сертификаты, страну производства и свойства.',
       'Стиль: ' + tone + '. Категория: ' + category + '. Название: ' + name + '. Характеристики: ' + details + '.',
       'Верни только JSON с двумя строковыми полями: description и seoTitle.',
-    ].join('\n')
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
-      body: JSON.stringify({ model, temperature: 0.4, messages: [{ role: 'system', content: 'Отвечай строго JSON без Markdown.' }, { role: 'user', content: prompt }] }),
-      signal: AbortSignal.timeout(25000),
-    })
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '')
-      console.error('AI provider error:', response.status, detail.slice(0, 300))
-      return res.status(502).json({ error: 'Сервис генерации временно недоступен. Проверьте настройки AI-провайдера и попробуйте позже.' })
-    }
-    const payload = await response.json()
-    const raw = payload.choices && payload.choices[0] && payload.choices[0].message && payload.choices[0].message.content
-    if (typeof raw !== 'string') return res.status(502).json({ error: 'AI-провайдер вернул ответ в неподдерживаемом формате.' })
-    let parsed
+    ].join('\\n')
     try {
-      parsed = JSON.parse(raw.replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/, ''))
-    } catch {
-      return res.status(502).json({ error: 'Не удалось разобрать ответ AI. Попробуйте повторить запрос.' })
+      const result = await generateGeminiJson(prompt, 900)
+      const description = cleanText(result.data.description, 3000)
+      const seoTitle = cleanText(result.data.seoTitle, 180)
+      if (!description || !seoTitle) return res.status(502).json({ error: 'Gemini не вернул описание и SEO-заголовок.' })
+      res.json({ description, seoTitle, provider: 'live', model: result.model })
+    } catch (error) {
+      if (error.message === 'GEMINI_RATE_LIMIT') return res.status(429).json({ error: 'Бесплатный лимит Gemini временно исчерпан. Попробуйте позже.' })
+      console.error('Gemini product copy failed:', error.message)
+      return res.status(502).json({ error: 'Gemini временно не смог создать описание. Проверьте API-ключ и модель.' })
     }
-    const description = cleanText(parsed.description, 3000)
-    const seoTitle = cleanText(parsed.seoTitle, 180)
-    if (!description || !seoTitle) return res.status(502).json({ error: 'AI-провайдер не вернул описание и SEO-заголовок.' })
-    res.json({ description, seoTitle, provider: 'live' })
   }))
 
 
@@ -421,25 +441,21 @@ export async function createApp(options = {}) {
       language: req.body.language === 'en' ? 'English' : 'Russian',
     }
     if (!brief.products) return res.status(400).json({ error: 'Опишите товары, которые будет продавать магазин.' })
-    const apiKey = process.env.SHOPAI_AI_API_KEY
+    const apiKey = process.env.GEMINI_API_KEY || process.env.SHOPAI_AI_API_KEY
     if (!apiKey) {
-      return res.status(503).json({ error: 'AI-провайдер не подключён. Добавьте SHOPAI_AI_API_KEY в файл .env и перезапустите сервер.' })
+      return res.status(503).json({ error: 'Gemini API не подключён. Добавьте GEMINI_API_KEY в файл .env и перезапустите сервер.' })
     }
-    const apiUrl = process.env.SHOPAI_AI_API_URL || 'https://openrouter.ai/api/v1/chat/completions'
-    const model = process.env.SHOPAI_AI_MODEL || 'openrouter/free'
     const palette = SITE_PALETTES[brief.palette]
-    const system = [
+    const prompt = [
       'You are a senior ecommerce conversion copywriter and UX designer.',
       'Create copy and a compact design specification for a real small online-store landing page.',
       'Return ONLY valid JSON. No markdown fences, no comments.',
       'Never invent certifications, guarantees, delivery promises, years in business, reviews, discounts, addresses, contacts or product specifications.',
-      'Use only the facts in the brief. If information is missing, write neutral copy without making claims.',
-      'Keep the hero title concise (3-9 words), subtitle one or two sentences, about text 2-4 sentences.',
+      'Use only facts in the brief. If information is missing, write neutral copy without making claims.',
+      'Keep hero title concise (3-9 words), subtitle one or two sentences, about text 2-4 sentences.',
       'features must contain 3 short, factual value propositions derived from the brief, not fabricated service promises.',
-      'The user selected the palette and layout. Do not change them.',
+      'Do not change the selected palette or layout.',
       'JSON schema: {"heroTitle":"string","heroSubtitle":"string","aboutTitle":"string","aboutText":"string","ctaLabel":"string","productIntro":"string","metaTitle":"string","metaDescription":"string","features":["string","string","string"]}.',
-    ].join(' ')
-    const userPrompt = [
       'Language: ' + brief.language,
       'Store name: ' + brief.storeName,
       'Niche: ' + brief.niche,
@@ -449,46 +465,20 @@ export async function createApp(options = {}) {
       'Tone: ' + brief.tone,
       'Visual layout: ' + brief.style,
       'Palette: ' + brief.palette + ' (' + palette.primary + ')',
-      'Create the landing-page copy and SEO fields. Avoid generic filler.',
-    ].join('\n')
-    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey }
-    if (apiUrl.includes('openrouter.ai')) {
-      headers['HTTP-Referer'] = 'https://github.com/karimover/ShopAI'
-      headers['X-Title'] = 'ShopAI storefront builder'
-    }
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        temperature: 0.65,
-        max_tokens: 1300,
-        messages: [{ role: 'system', content: system }, { role: 'user', content: userPrompt }],
-      }),
-      signal: AbortSignal.timeout(45000),
-    })
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '')
-      console.error('Storefront AI provider error:', response.status, detail.slice(0, 500))
-      return res.status(502).json({ error: response.status === 429 ? 'Бесплатный лимит AI исчерпан. Попробуйте позже.' : 'AI-провайдер не смог создать сайт. Проверьте ключ, модель и попробуйте ещё раз.' })
-    }
-    const payload = await response.json()
-    const raw = payload.choices?.[0]?.message?.content
-    if (typeof raw !== 'string') return res.status(502).json({ error: 'AI вернул ответ в неподдерживаемом формате.' })
-    let parsed
+      'Create landing-page copy and SEO fields. Avoid generic filler.',
+    ].join('\\n')
     try {
-      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
-      const start = cleaned.indexOf('{')
-      const end = cleaned.lastIndexOf('}')
-      parsed = JSON.parse(start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned)
-    } catch {
-      return res.status(502).json({ error: 'Не удалось разобрать ответ AI. Попробуйте повторить генерацию.' })
+      const result = await generateGeminiJson(prompt, 1500)
+      const config = safeSiteConfig({ ...result.data, palette: brief.palette, designStyle: brief.style })
+      if (!config?.heroTitle || !config?.heroSubtitle || !config?.aboutText) {
+        return res.status(502).json({ error: 'Gemini не вернул все обязательные блоки сайта. Попробуйте ещё раз.' })
+      }
+      res.json({ siteConfig: config, provider: 'gemini', model: result.model })
+    } catch (error) {
+      if (error.message === 'GEMINI_RATE_LIMIT') return res.status(429).json({ error: 'Бесплатный лимит Gemini временно исчерпан. Попробуйте позже.' })
+      console.error('Gemini storefront generation failed:', error.message)
+      return res.status(502).json({ error: 'Gemini не смог создать сайт. Проверьте ключ и попробуйте ещё раз.' })
     }
-    const config = safeSiteConfig({ ...parsed, palette: brief.palette, designStyle: brief.style })
-    if (!config?.heroTitle || !config?.heroSubtitle || !config?.aboutText) {
-      return res.status(502).json({ error: 'AI не вернул все обязательные блоки сайта. Попробуйте ещё раз.' })
-    }
-    res.json({ siteConfig: config, provider: apiUrl.includes('openrouter.ai') ? 'openrouter' : 'custom', model })
   }))
 
   app.get('/api/orders', requireAuth, (req, res) => {
