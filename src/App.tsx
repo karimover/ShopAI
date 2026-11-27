@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import {
   Activity, ArrowRight, ArrowUpRight, Bell, Check, ChevronLeft, ChevronRight,
   ChevronsUpDown, CreditCard, Download, Eye, Filter, Gift, Globe2, LayoutDashboard,
@@ -62,7 +62,7 @@ function App() {
   const persist=(next:Product[])=>{setProducts(next);localStorage.setItem('shopai-products',JSON.stringify(next))}
   const openCreate=()=>{setEditing(null);setForm({name:'',category:'Декор',price:'',stock:'',image:''});setModal(true)}
   const openEdit=(p:Product)=>{setEditing(p);setForm({name:p.name,category:p.category,price:String(p.price),stock:String(p.stock),image:p.image});setModal(true)}
-  const saveProduct=(e:React.FormEvent)=>{e.preventDefault();if(!form.name.trim())return;const item:Product={id:editing?.id??Date.now(),name:form.name.trim(),category:form.category,price:Number(form.price)||0,stock:Number(form.stock)||0,sold:editing?.sold??0,status:'Активен',sku:editing?.sku??'NS-'+String(products.length+2).padStart(3,'0'),image:form.image||'https://images.unsplash.com/photo-1578500494198-246f612d3b3d?w=180&auto=format&fit=crop&q=85'};persist(editing?products.map(p=>p.id===editing.id?item:p):[item,...products]);setModal(false);notify(editing?'Товар обновлён':'Товар добавлен в каталог')}
+  const saveProduct=(e:FormEvent)=>{e.preventDefault();if(!form.name.trim())return;const item:Product={id:editing?.id??Date.now(),name:form.name.trim(),category:form.category,price:Number(form.price)||0,stock:Number(form.stock)||0,sold:editing?.sold??0,status:'Активен',sku:editing?.sku??'NS-'+String(products.length+2).padStart(3,'0'),image:form.image||'https://images.unsplash.com/photo-1578500494198-246f612d3b3d?w=180&auto=format&fit=crop&q=85'};persist(editing?products.map(p=>p.id===editing.id?item:p):[item,...products]);setModal(false);notify(editing?'Товар обновлён':'Товар добавлен в каталог')}
   const deleteProduct=(id:number)=>{if(confirm('Удалить товар из каталога?')){persist(products.filter(p=>p.id!==id));notify('Товар удалён')}}
   const generate=()=>{if(!aiName.trim()||!aiDetails.trim()){notify('Заполните название и характеристики');return}setAiResult(`${aiName}. ${aiDetails} ${aiTone==='Премиальный'?'Продуманный объект для интерьера, в котором каждая деталь имеет значение.':'Небольшая деталь, которая добавляет пространству характер и ощущение уюта.'} Создано для тех, кто выбирает вещи осознанно и ценит качество материалов.`);notify('Черновик подготовлен')}
   const copyAi=()=>{navigator.clipboard?.writeText(aiResult).then(()=>notify('Текст скопирован')).catch(()=>notify('Не удалось скопировать текст'))}
@@ -93,7 +93,7 @@ function App() {
     {toast&&<div className="toast"><Check size={16}/>{toast}</div>}
   </div>
 }
-function PageHeading({eyebrow,title,description,action}:{eyebrow:string;title:string;description:string;action?:React.ReactNode}){return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{action}</div>}
+function PageHeading({eyebrow,title,description,action}:{eyebrow:string;title:string;description:string;action?:ReactNode}){return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{action}</div>}
 function Overview({products,orders,period,setPeriod,navigate,openCreate}:{products:Product[];orders:Order[];period:string;setPeriod:(s:string)=>void;navigate:(p:Page)=>void;openCreate:()=>void}){
   return <><PageHeading eyebrow="ПЯТНИЦА, 27 НОЯБРЯ 2026" title="Добрый день, Эмир 👋" description="Вот что происходит с вашим магазином сегодня." action={<button className="button button-primary" onClick={openCreate}><Plus size={16}/> Добавить товар</button>}/>
     <section className="welcome-banner"><div className="welcome-orb orb-one"/><div className="welcome-orb orb-two"/><div className="welcome-copy"><div className="welcome-kicker"><Sparkles size={13}/> SHOPAI INTELLIGENCE</div><h2>Ваш магазин. На шаг впереди.</h2><p>Подготовьте карточки товаров, найдите точки роста и освободите время для развития бренда.</p><button onClick={()=>navigate('ai')}>Открыть AI Studio <ArrowUpRight size={15}/></button></div><div className="welcome-art"><div className="art-ring ring-one"/><div className="art-ring ring-two"/><div className="art-core"><Sparkles size={36}/></div><span className="art-chip chip-a"><WandSparkles size={14}/> AI copy</span><span className="art-chip chip-b"><TrendingUp size={14}/> Growth</span></div></section>
