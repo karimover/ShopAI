@@ -26,7 +26,7 @@ AI помогает владельцу магазина подготовить �
 
 ```env
 CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id
-CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
+SHOPAI_CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
 CLOUDFLARE_AI_MODEL=@cf/google/gemma-4-26b-a4b-it
 ```
 
