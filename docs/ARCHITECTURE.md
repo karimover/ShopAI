@@ -106,7 +106,7 @@ JSON-хранилище не рассчитано на несколько экз
 - Frontend: Vite build в `dist/`, раздача через Workers Static Assets с SPA fallback.
 - API: Express на Cloudflare Workers через `cloudflare:node` и флаг `nodejs_compat`.
 - D1 binding `DB`: версионируемая JSON-запись приложения для MVP; optimistic revision update предотвращает silent overwrite при конкурентной записи.
-- R2 binding `UPLOADS`: бинарные фотографии товаров с Content-Type metadata.
+- D1 table `uploads`: бинарные фотографии товаров и Content-Type; лимит 1,7 МБ на изображение из-за максимального размера BLOB в 2 МБ.
 - Secrets: `CLOUDFLARE_ACCOUNT_ID` и `CLOUDFLARE_API_TOKEN`; модель задана как Worker variable.
 - Публичный маршрут `/shop/:slug` отдаётся SPA, API и изображения направляются в Worker.
 - Для production-масштабирования JSON snapshot следует заменить на нормализованные D1-таблицы и транзакции.
