@@ -36,19 +36,26 @@ const persistence = {
 }
 
 const uploadStorage = {
+  maxBytes: 1_800_000,
+
   async put(filename, data, contentType) {
-    await env.UPLOADS.put(filename, data, {
-      httpMetadata: { contentType },
-    })
+    await env.DB
+      .prepare('INSERT OR REPLACE INTO uploads (filename, content_type, data) VALUES (?, ?, ?)')
+      .bind(filename, contentType, data)
+      .run()
   },
 
   async get(filename) {
-    const object = await env.UPLOADS.get(filename)
-    if (!object) return null
+    const row = await env.DB
+      .prepare('SELECT data, content_type FROM uploads WHERE filename = ?')
+      .bind(filename)
+      .first()
+
+    if (!row) return null
 
     return {
-      data: await object.arrayBuffer(),
-      contentType: object.httpMetadata?.contentType || 'application/octet-stream',
+      data: row.data,
+      contentType: row.content_type || 'application/octet-stream',
     }
   },
 }
