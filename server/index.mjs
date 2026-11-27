@@ -426,12 +426,18 @@ export async function createApp(options = {}) {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Проверьте email.' })
     if (!Array.isArray(req.body.items) || !req.body.items.length || req.body.items.length > 30) return res.status(400).json({ error: 'Корзина пуста или содержит слишком много позиций.' })
 
-    const items = []
+    const requestedQuantities = new Map()
     for (const requested of req.body.items) {
       const product = db.products.find((item) => item.id === requested.productId && item.storeId === store.id && item.published)
       const quantity = Number(requested.quantity)
       if (!product || !Number.isInteger(quantity) || quantity < 1) return res.status(400).json({ error: 'Один из товаров недоступен.' })
-      if (product.stock < quantity) return res.status(409).json({ error: 'Недостаточно товара «' + product.name + '» в наличии.' })
+      requestedQuantities.set(product.id, (requestedQuantities.get(product.id) || 0) + quantity)
+    }
+
+    const items = []
+    for (const [productId, quantity] of requestedQuantities) {
+      const product = db.products.find((item) => item.id === productId && item.storeId === store.id)
+      if (!product || product.stock < quantity) return res.status(409).json({ error: 'Недостаточно товара «' + (product?.name || 'из корзины') + '» в наличии.' })
       items.push({ productId: product.id, name: product.name, price: product.price, quantity })
     }
     const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0)

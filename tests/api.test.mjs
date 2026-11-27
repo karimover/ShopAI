@@ -76,6 +76,15 @@ test('complete MVP journey: register, create product, publish store and receive 
     const products = await request('/api/products')
     assert.equal(products.body.products[0].stock, 3)
 
+    const duplicateOverstock = await request('/api/public/' + slug + '/orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerName: 'Another Customer', email: 'another@example.com', phone: '',
+        items: [{ productId, quantity: 2 }, { productId, quantity: 2 }],
+      }),
+    })
+    assert.equal(duplicateOverstock.response.status, 409)
+
     const statusUpdate = await request('/api/orders/' + orders.body.orders[0].id, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'Отменён' }),
