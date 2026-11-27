@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "shopai-db",
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      "database_id": "7cd1e15a-21c8-4345-a0c3-90eed8c0320d",
       "migrations_dir": "migrations"
     }
   ],
