@@ -121,11 +121,12 @@ async function generateCloudflareJson(prompt, maxOutputTokens = 1200) {
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: 'Отвечай строго валидным JSON без Markdown и пояснений.' },
+        { role: 'system', content: 'Ты создаёшь готовый контент для интернет-магазина. Верни только валидный JSON. Каждое строковое поле должно содержать реальный, законченный текст на заданном языке. Никогда не возвращай названия типов данных, слова string/text, заглушки, пустые строки или текст схемы. Не объясняй ход решения.' },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.45,
+      temperature: 0.35,
       max_completion_tokens: maxOutputTokens,
+      chat_template_kwargs: { enable_thinking: false },
     }),
     signal: AbortSignal.timeout(45000),
   })
@@ -199,6 +200,21 @@ const safeSiteConfig = (value) => {
     designStyle: style,
     primaryColor: SITE_PALETTES[palette].primary,
   }
+}
+
+const isPlaceholderCopy = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return true
+  return /^(string|text|title|description|placeholder|todo|tbd|n\/a|\.\.\.|—|-)$/i.test(value.trim())
+}
+const hasUsableSiteCopy = (config) => {
+  if (!config) return false
+  const requiredFields = [
+    config.heroTitle, config.heroSubtitle, config.aboutTitle, config.aboutText,
+    config.ctaLabel, config.productIntro, config.metaTitle, config.metaDescription,
+  ]
+  return requiredFields.every((value) => !isPlaceholderCopy(value))
+    && config.features.length === 3
+    && config.features.every((value) => !isPlaceholderCopy(value))
 }
 
 function makeDemoCopy({ name, category, details, tone }) {
@@ -494,7 +510,10 @@ export async function createApp(options = {}) {
       'Keep hero title concise (3-9 words), subtitle one or two sentences, about text 2-4 sentences.',
       'features must contain 3 short, factual value propositions derived from the brief, not fabricated service promises.',
       'Do not change the selected palette or layout.',
-      'JSON schema: {"heroTitle":"string","heroSubtitle":"string","aboutTitle":"string","aboutText":"string","ctaLabel":"string","productIntro":"string","metaTitle":"string","metaDescription":"string","features":["string","string","string"]}.',
+      'Return one JSON object with exactly these keys: heroTitle, heroSubtitle, aboutTitle, aboutText, ctaLabel, productIntro, metaTitle, metaDescription, features.',
+      'All first eight values must be natural, publication-ready copy in the requested language. features must be an array of exactly 3 concise benefit statements.',
+      'Never output the literal words string, text, title, description, placeholder, TODO, or schema as a field value. These are not valid copy.',
+      'Write copy specifically for this store and the supplied niche, products, audience, differentiator, tone and style. Avoid generic filler.',
       'Language: ' + brief.language,
       'Store name: ' + brief.storeName,
       'Niche: ' + brief.niche,
@@ -507,10 +526,11 @@ export async function createApp(options = {}) {
       'Create landing-page copy and SEO fields. Avoid generic filler.',
     ].join('\n')
     try {
-      const result = await generateCloudflareJson(prompt, 1500)
+      const result = await generateCloudflareJson(prompt, 2200)
       const config = safeSiteConfig({ ...result.data, palette: brief.palette, designStyle: brief.style })
-      if (!config?.heroTitle || !config?.heroSubtitle || !config?.aboutText) {
-        return res.status(502).json({ error: 'Cloudflare Workers AI не вернул все обязательные блоки сайта. Попробуйте ещё раз.' })
+      if (!hasUsableSiteCopy(config)) {
+        console.warn('Cloudflare storefront generation returned placeholder or incomplete copy')
+        return res.status(502).json({ error: 'AI вернул шаблонные или неполные тексты. Нажмите «Сгенерировать сайт» ещё раз — пустой шаблон не будет сохранён.' })
       }
       res.json({ siteConfig: config, provider: 'cloudflare-workers-ai', model: result.model })
     } catch (error) {
