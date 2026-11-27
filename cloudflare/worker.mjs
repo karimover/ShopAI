@@ -96,6 +96,6 @@ export default {
       globalThis.__shopaiHttpHandler = httpServerHandler({ port: 3000 })
       app.listen(3000)
     }
-    return globalThis.__shopaiHttpHandler(request)
+    return globalThis.__shopaiHttpHandler.fetch(request, env, ctx)
   },
 }
