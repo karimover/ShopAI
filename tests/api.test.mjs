@@ -148,3 +148,82 @@ test('private endpoints reject requests without a session', async () => {
     await fs.rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test('AI storefront rejects literal schema placeholders instead of treating them as generated copy', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'shopai-ai-placeholder-test-'))
+  const app = await createApp({ dataFile: path.join(directory, 'db.json'), uploadsDir: path.join(directory, 'uploads') })
+  const server = app.listen(0)
+  await new Promise((resolve) => server.once('listening', resolve))
+  const baseUrl = 'http://127.0.0.1:' + server.address().port
+  let cookie = ''
+  const originalFetch = globalThis.fetch
+  const originalAccount = process.env.CLOUDFLARE_ACCOUNT_ID
+  const originalToken = process.env.CLOUDFLARE_API_TOKEN
+  const originalModel = process.env.CLOUDFLARE_AI_MODEL
+
+  process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
+  process.env.CLOUDFLARE_API_TOKEN = 'test-token'
+  process.env.CLOUDFLARE_AI_MODEL = '@cf/google/gemma-4-26b-a4b-it'
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes('api.cloudflare.com')) {
+      return new Response(JSON.stringify({
+        choices: [{
+          message: {
+            role: 'assistant',
+            content: JSON.stringify({
+              heroTitle: 'string',
+              heroSubtitle: 'string',
+              aboutTitle: 'string',
+              aboutText: 'string',
+              ctaLabel: 'string',
+              productIntro: 'string',
+              metaTitle: 'string',
+              metaDescription: 'string',
+              features: ['string', 'string', 'string'],
+            }),
+          },
+          finish_reason: 'stop',
+        }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+    return originalFetch(url, options)
+  }
+
+  try {
+    const request = async (url, options = {}) => {
+      const response = await originalFetch(baseUrl + url, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...(options.headers || {}) },
+      })
+      const setCookie = response.headers.get('set-cookie')
+      if (setCookie) cookie = setCookie.split(';')[0]
+      return { response, body: await response.json() }
+    }
+
+    const registration = await request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'AI Test Owner', email: 'ai-owner@example.com', password: 'password-123', storeName: 'AI Test Shop', category: 'Decor' }),
+    })
+    assert.equal(registration.response.status, 201)
+
+    const generation = await request('/api/ai/storefront', {
+      method: 'POST',
+      body: JSON.stringify({ products: 'Керамические вазы', storeName: 'AI Test Shop', niche: 'Декор' }),
+    })
+    assert.equal(generation.response.status, 502)
+    assert.match(generation.body.error, /шаблонные или неполные тексты/i)
+  } finally {
+    globalThis.fetch = originalFetch
+    for (const [key, value] of Object.entries({
+      CLOUDFLARE_ACCOUNT_ID: originalAccount,
+      CLOUDFLARE_API_TOKEN: originalToken,
+      CLOUDFLARE_AI_MODEL: originalModel,
+    })) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    await fs.rm(directory, { recursive: true, force: true })
+  }
+})
