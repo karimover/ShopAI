@@ -445,6 +445,7 @@ export async function createApp(options = {}) {
       res.json({ description, seoTitle, provider: 'live', model: result.model })
     } catch (error) {
       if (error.message === 'CLOUDFLARE_RATE_LIMIT') return res.status(429).json({ error: 'Дневная квота Cloudflare Workers AI временно исчерпана. Попробуйте позже.' })
+      if (error.message === 'CLOUDFLARE_AUTH_ERROR') return res.status(502).json({ error: 'Cloudflare отклонил токен. Проверьте Account ID и разрешения Workers AI у API Token.' })
       console.error('Cloudflare product copy failed:', error.message)
       return res.status(502).json({ error: 'Cloudflare Workers AI временно не смог создать описание. Проверьте API-ключ и модель.' })
     }
@@ -501,6 +502,7 @@ export async function createApp(options = {}) {
       res.json({ siteConfig: config, provider: 'cloudflare-workers-ai', model: result.model })
     } catch (error) {
       if (error.message === 'CLOUDFLARE_RATE_LIMIT') return res.status(429).json({ error: 'Дневная квота Cloudflare Workers AI временно исчерпана. Попробуйте позже.' })
+      if (error.message === 'CLOUDFLARE_AUTH_ERROR') return res.status(502).json({ error: 'Cloudflare отклонил токен. Проверьте Account ID и разрешения Workers AI у API Token.' })
       console.error('Cloudflare storefront generation failed:', error.message)
       return res.status(502).json({ error: 'Cloudflare Workers AI не смог создать сайт. Проверьте ключ и попробуйте ещё раз.' })
     }
