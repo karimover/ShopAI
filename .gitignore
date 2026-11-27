@@ -24,3 +24,7 @@ env/
 .DS_Store
 *.swp
 npm-debug.log*
+
+# Cloudflare local state
+.wrangler/
+.dev.vars
