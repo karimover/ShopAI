@@ -227,3 +227,70 @@ test('AI storefront rejects literal schema placeholders instead of treating them
     await fs.rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test('external persistence adapter keeps accounts across app instances', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'shopai-persistence-test-'))
+  const state = {
+    data: { users: [], sessions: [], stores: [], products: [], orders: [] },
+    revision: 0,
+  }
+  const persistence = {
+    async load() {
+      return structuredClone(state)
+    },
+    async save(payload, expectedRevision) {
+      if (expectedRevision !== state.revision) throw new Error('DB_WRITE_CONFLICT')
+      state.data = JSON.parse(payload)
+      state.revision += 1
+      return state.revision
+    },
+  }
+
+  const start = async () => {
+    const app = await createApp({
+      persistence,
+      uploadsDir: path.join(directory, 'uploads'),
+      assetsServedExternally: true,
+    })
+    const server = app.listen(0)
+    await new Promise((resolve) => server.once('listening', resolve))
+    return { server, baseUrl: 'http://127.0.0.1:' + server.address().port }
+  }
+
+  let first
+  let second
+  try {
+    first = await start()
+    const registration = await fetch(first.baseUrl + '/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Persistent Owner',
+        email: 'persistent@example.com',
+        password: 'password-123',
+        storeName: 'Persistent Shop',
+        category: 'Decor',
+      }),
+    })
+    assert.equal(registration.status, 201)
+    const cookie = registration.headers.get('set-cookie').split(';')[0]
+    assert.equal(state.revision, 1)
+
+    await new Promise((resolve) => first.server.close(resolve))
+    first = null
+
+    second = await start()
+    const me = await fetch(second.baseUrl + '/api/me', {
+      headers: { Cookie: cookie },
+    })
+    assert.equal(me.status, 200)
+    const payload = await me.json()
+    assert.equal(payload.user.email, 'persistent@example.com')
+    assert.equal(payload.store.name, 'Persistent Shop')
+  } finally {
+    if (first?.server) await new Promise((resolve) => first.server.close(resolve))
+    if (second?.server) await new Promise((resolve) => second.server.close(resolve))
+    await fs.rm(directory, { recursive: true, force: true })
+  }
+})
