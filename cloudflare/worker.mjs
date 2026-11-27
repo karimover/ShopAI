@@ -56,7 +56,7 @@ const uploadStorage = {
 const app = await createApp({
   runtimeConfig: {
     CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID,
-    CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
+    SHOPAI_CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
     CLOUDFLARE_AI_MODEL: env.CLOUDFLARE_AI_MODEL || '@cf/google/gemma-4-26b-a4b-it',
   },
   persistence,
