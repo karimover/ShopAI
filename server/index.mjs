@@ -504,7 +504,11 @@ export async function createApp(options = {}) {
     const match = dataUrl.match(/^data:image\/(png|jpeg|webp);base64,([a-zA-Z0-9+/=]+)$/)
     if (!match) return res.status(400).json({ error: 'Поддерживаются изображения PNG, JPEG и WebP.' })
     const buffer = Buffer.from(match[2], 'base64')
-    if (!buffer.length || buffer.length > IMAGE_LIMIT_BYTES) return res.status(413).json({ error: 'Размер изображения должен быть не более 4 МБ.' })
+    const maxUploadBytes = uploadStorage?.maxBytes || IMAGE_LIMIT_BYTES
+    if (!buffer.length || buffer.length > maxUploadBytes) {
+      const maxUploadMb = (maxUploadBytes / (1024 * 1024)).toFixed(1).replace('.', ',')
+      return res.status(413).json({ error: 'Размер изображения должен быть не более ' + maxUploadMb + ' МБ.' })
+    }
     const extension = match[1] === 'jpeg' ? 'jpg' : match[1]
     const filename = crypto.randomBytes(18).toString('hex') + '.' + extension
     if (uploadStorage) {
