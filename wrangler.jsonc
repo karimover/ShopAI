@@ -18,12 +18,6 @@
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "UPLOADS",
-      "bucket_name": "shopai-uploads"
-    }
-  ],
   "vars": {
     "CLOUDFLARE_AI_MODEL": "@cf/google/gemma-4-26b-a4b-it"
   },
