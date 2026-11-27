@@ -25,6 +25,12 @@ test('complete MVP journey: register, create product, publish store and receive 
   }
 
   try {
+    const anonymousAi = await request('/api/ai/storefront', {
+      method: 'POST',
+      body: JSON.stringify({ products: 'Керамические вазы' }),
+    })
+    assert.equal(anonymousAi.response.status, 401)
+
     const registration = await request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ name: 'Test Owner', email: 'owner@example.com', password: 'password-123', storeName: 'Demo Shop', category: 'Home' }),
@@ -46,6 +52,26 @@ test('complete MVP journey: register, create product, publish store and receive 
     assert.equal(productResponse.response.status, 201)
     const productId = productResponse.body.product.id
 
+    const siteConfig = {
+      heroTitle: 'Керамика для уютного дома',
+      heroSubtitle: 'Предметы ручной работы для повседневных ритуалов.',
+      aboutTitle: 'Небольшая мастерская',
+      aboutText: 'Создаём керамические предметы для дома.',
+      ctaLabel: 'Смотреть коллекцию',
+      productIntro: 'Выберите свою вещь',
+      metaTitle: 'Demo Shop — керамика',
+      metaDescription: 'Керамические предметы для дома.',
+      features: ['Ручная работа', 'Небольшие серии'],
+      palette: 'forest',
+      designStyle: 'editorial',
+    }
+    const saveSite = await request('/api/store', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Demo Shop', description: siteConfig.heroSubtitle, category: 'Home', siteConfig }),
+    })
+    assert.equal(saveSite.response.status, 200)
+    assert.equal(saveSite.body.store.siteConfig.primaryColor, '#315f4b')
+
     const generated = await request('/api/ai/product-copy', {
       method: 'POST',
       body: JSON.stringify({ name: 'Ceramic vase', category: 'Decor', details: 'Handmade ceramic vase', tone: 'Friendly' }),
@@ -64,6 +90,7 @@ test('complete MVP journey: register, create product, publish store and receive 
     assert.equal(storefront.response.status, 200)
     assert.equal(storefront.body.products.length, 1)
     assert.equal(storefront.body.products[0].id, productId)
+    assert.equal(storefront.body.store.siteConfig.heroTitle, 'Керамика для уютного дома')
 
     const orderResponse = await request('/api/public/' + slug + '/orders', {
       method: 'POST',

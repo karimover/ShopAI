@@ -87,7 +87,8 @@ function publicStore(store, products) {
       slug: store.slug,
       description: store.description,
       category: store.category,
-      primaryColor: store.primaryColor,
+      primaryColor: store.siteConfig?.primaryColor || store.primaryColor,
+      siteConfig: safeSiteConfig(store.siteConfig),
     },
     products: products.map((product) => ({
       id: product.id,
@@ -99,6 +100,33 @@ function publicStore(store, products) {
       stock: product.stock,
       imageUrl: product.imageUrl,
     })),
+  }
+}
+
+
+const SITE_PALETTES = {
+  violet: { primary: '#6558d3', background: '#f6f4ff' },
+  forest: { primary: '#315f4b', background: '#f1f5f0' },
+  sand: { primary: '#a66f42', background: '#f8f2e9' },
+  mono: { primary: '#292929', background: '#f3f3f1' },
+}
+const safeSiteConfig = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const palette = Object.hasOwn(SITE_PALETTES, value.palette) ? value.palette : 'violet'
+  const style = ['minimal', 'editorial', 'bold'].includes(value.designStyle) ? value.designStyle : 'minimal'
+  return {
+    heroTitle: cleanText(value.heroTitle, 100),
+    heroSubtitle: cleanText(value.heroSubtitle, 320),
+    aboutTitle: cleanText(value.aboutTitle, 100),
+    aboutText: cleanText(value.aboutText, 500),
+    ctaLabel: cleanText(value.ctaLabel, 40) || 'Смотреть каталог',
+    productIntro: cleanText(value.productIntro, 100),
+    metaTitle: cleanText(value.metaTitle, 160),
+    metaDescription: cleanText(value.metaDescription, 300),
+    features: Array.isArray(value.features) ? value.features.slice(0, 4).map((item) => cleanText(item, 70)).filter(Boolean) : [],
+    palette,
+    designStyle: style,
+    primaryColor: SITE_PALETTES[palette].primary,
   }
 }
 
@@ -244,6 +272,15 @@ export async function createApp(options = {}) {
     store.description = cleanText(req.body.description, 500)
     store.category = cleanText(req.body.category, 80) || 'Товары'
     if (/^#[0-9a-fA-F]{6}$/.test(req.body.primaryColor || '')) store.primaryColor = req.body.primaryColor
+    if (req.body.siteConfig) {
+      const siteConfig = safeSiteConfig(req.body.siteConfig)
+      if (!siteConfig?.heroTitle || !siteConfig?.heroSubtitle || !siteConfig?.aboutText) {
+        return res.status(400).json({ error: 'Проверьте содержимое AI-сайта перед сохранением.' })
+      }
+      store.siteConfig = siteConfig
+      store.primaryColor = siteConfig.primaryColor
+      store.description = siteConfig.heroSubtitle
+    }
     if (typeof req.body.published === 'boolean') store.published = req.body.published
     store.updatedAt = new Date().toISOString()
     await persist()
@@ -366,6 +403,92 @@ export async function createApp(options = {}) {
     const seoTitle = cleanText(parsed.seoTitle, 180)
     if (!description || !seoTitle) return res.status(502).json({ error: 'AI-провайдер не вернул описание и SEO-заголовок.' })
     res.json({ description, seoTitle, provider: 'live' })
+  }))
+
+
+  app.post('/api/ai/storefront', requireAuth, route(async (req, res) => {
+    const store = requireStore(req, res)
+    if (!store) return
+    const brief = {
+      storeName: cleanText(req.body.storeName, 100) || store.name,
+      niche: cleanText(req.body.niche, 100) || store.category,
+      audience: cleanText(req.body.audience, 240),
+      products: cleanText(req.body.products, 1000),
+      advantage: cleanText(req.body.advantage, 320),
+      style: ['minimal', 'editorial', 'bold'].includes(req.body.style) ? req.body.style : 'minimal',
+      palette: Object.hasOwn(SITE_PALETTES, req.body.palette) ? req.body.palette : 'violet',
+      tone: ['friendly', 'premium', 'expert'].includes(req.body.tone) ? req.body.tone : 'friendly',
+      language: req.body.language === 'en' ? 'English' : 'Russian',
+    }
+    if (!brief.products) return res.status(400).json({ error: 'Опишите товары, которые будет продавать магазин.' })
+    const apiKey = process.env.SHOPAI_AI_API_KEY
+    if (!apiKey) {
+      return res.status(503).json({ error: 'AI-провайдер не подключён. Добавьте SHOPAI_AI_API_KEY в файл .env и перезапустите сервер.' })
+    }
+    const apiUrl = process.env.SHOPAI_AI_API_URL || 'https://openrouter.ai/api/v1/chat/completions'
+    const model = process.env.SHOPAI_AI_MODEL || 'openrouter/free'
+    const palette = SITE_PALETTES[brief.palette]
+    const system = [
+      'You are a senior ecommerce conversion copywriter and UX designer.',
+      'Create copy and a compact design specification for a real small online-store landing page.',
+      'Return ONLY valid JSON. No markdown fences, no comments.',
+      'Never invent certifications, guarantees, delivery promises, years in business, reviews, discounts, addresses, contacts or product specifications.',
+      'Use only the facts in the brief. If information is missing, write neutral copy without making claims.',
+      'Keep the hero title concise (3-9 words), subtitle one or two sentences, about text 2-4 sentences.',
+      'features must contain 3 short, factual value propositions derived from the brief, not fabricated service promises.',
+      'The user selected the palette and layout. Do not change them.',
+      'JSON schema: {"heroTitle":"string","heroSubtitle":"string","aboutTitle":"string","aboutText":"string","ctaLabel":"string","productIntro":"string","metaTitle":"string","metaDescription":"string","features":["string","string","string"]}.',
+    ].join(' ')
+    const userPrompt = [
+      'Language: ' + brief.language,
+      'Store name: ' + brief.storeName,
+      'Niche: ' + brief.niche,
+      'Target audience: ' + (brief.audience || 'not specified'),
+      'Products: ' + brief.products,
+      'Differentiator: ' + (brief.advantage || 'not specified'),
+      'Tone: ' + brief.tone,
+      'Visual layout: ' + brief.style,
+      'Palette: ' + brief.palette + ' (' + palette.primary + ')',
+      'Create the landing-page copy and SEO fields. Avoid generic filler.',
+    ].join('\n')
+    const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey }
+    if (apiUrl.includes('openrouter.ai')) {
+      headers['HTTP-Referer'] = 'https://github.com/karimover/ShopAI'
+      headers['X-Title'] = 'ShopAI storefront builder'
+    }
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        temperature: 0.65,
+        max_tokens: 1300,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: userPrompt }],
+      }),
+      signal: AbortSignal.timeout(45000),
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      console.error('Storefront AI provider error:', response.status, detail.slice(0, 500))
+      return res.status(502).json({ error: response.status === 429 ? 'Бесплатный лимит AI исчерпан. Попробуйте позже.' : 'AI-провайдер не смог создать сайт. Проверьте ключ, модель и попробуйте ещё раз.' })
+    }
+    const payload = await response.json()
+    const raw = payload.choices?.[0]?.message?.content
+    if (typeof raw !== 'string') return res.status(502).json({ error: 'AI вернул ответ в неподдерживаемом формате.' })
+    let parsed
+    try {
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+      const start = cleaned.indexOf('{')
+      const end = cleaned.lastIndexOf('}')
+      parsed = JSON.parse(start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned)
+    } catch {
+      return res.status(502).json({ error: 'Не удалось разобрать ответ AI. Попробуйте повторить генерацию.' })
+    }
+    const config = safeSiteConfig({ ...parsed, palette: brief.palette, designStyle: brief.style })
+    if (!config?.heroTitle || !config?.heroSubtitle || !config?.aboutText) {
+      return res.status(502).json({ error: 'AI не вернул все обязательные блоки сайта. Попробуйте ещё раз.' })
+    }
+    res.json({ siteConfig: config, provider: apiUrl.includes('openrouter.ai') ? 'openrouter' : 'custom', model })
   }))
 
   app.get('/api/orders', requireAuth, (req, res) => {
