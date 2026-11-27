@@ -105,37 +105,62 @@ function publicStore(store, products) {
 
 
 
-async function generateGeminiJson(prompt, maxOutputTokens = 1200) {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.SHOPAI_AI_API_KEY
-  if (!apiKey) throw new Error('GEMINI_KEY_MISSING')
-  const model = process.env.GEMINI_MODEL || process.env.SHOPAI_AI_MODEL || 'gemini-3.1-flash-lite'
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent'
+async function generateCloudflareJson(prompt, maxOutputTokens = 1200) {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN
+  if (!accountId || !apiToken) throw new Error('CLOUDFLARE_CONFIG_MISSING')
+
+  const model = process.env.CLOUDFLARE_AI_MODEL || '@cf/meta/llama-3.1-8b-instruct'
+  const url = 'https://api.cloudflare.com/client/v4/accounts/' + encodeURIComponent(accountId) + '/ai/v1/chat/completions'
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + apiToken,
+    },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.55, maxOutputTokens, responseMimeType: 'application/json' },
+      model,
+      messages: [
+        { role: 'system', content: 'Отвечай строго валидным JSON без Markdown и пояснений.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.45,
+      max_tokens: maxOutputTokens,
     }),
     signal: AbortSignal.timeout(45000),
   })
+
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
-    console.error('Gemini API error:', response.status, detail.slice(0, 500))
-    const error = new Error(response.status === 429 ? 'GEMINI_RATE_LIMIT' : 'GEMINI_PROVIDER_ERROR')
+    console.error('Cloudflare Workers AI API error:', response.status, detail.slice(0, 500))
+    const code = response.status === 429
+      ? 'CLOUDFLARE_RATE_LIMIT'
+      : response.status === 401 || response.status === 403
+        ? 'CLOUDFLARE_AUTH_ERROR'
+        : 'CLOUDFLARE_PROVIDER_ERROR'
+    const error = new Error(code)
     error.status = response.status
     throw error
   }
+
   const payload = await response.json()
-  const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim()
-  if (!raw) throw new Error('GEMINI_EMPTY_RESPONSE')
-  try { return { data: JSON.parse(raw), model } } catch {
-    const start = raw.indexOf('{')
-    const end = raw.lastIndexOf('}')
+  const raw = payload.choices && payload.choices[0] && payload.choices[0].message && payload.choices[0].message.content
+  if (typeof raw !== 'string' || !raw.trim()) throw new Error('CLOUDFLARE_EMPTY_RESPONSE')
+
+  const cleaned = raw.trim()
+    .replace(/^\u0060{3}(?:json)?\s*/i, '')
+    .replace(/\s*\u0060{3}$/, '')
+  try {
+    return { data: JSON.parse(cleaned), model }
+  } catch {
+    const start = cleaned.indexOf('{')
+    const end = cleaned.lastIndexOf('}')
     if (start >= 0 && end > start) {
-      try { return { data: JSON.parse(raw.slice(start, end + 1)), model } } catch {}
+      try {
+        return { data: JSON.parse(cleaned.slice(start, end + 1)), model }
+      } catch {}
     }
-    throw new Error('GEMINI_INVALID_JSON')
+    throw new Error('CLOUDFLARE_INVALID_JSON')
   }
 }
 
@@ -401,9 +426,9 @@ export async function createApp(options = {}) {
     const tone = cleanText(req.body.tone, 40) || 'Дружелюбный'
     if (!name || !details) return res.status(400).json({ error: 'Укажите название и характеристики товара.' })
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.SHOPAI_AI_API_KEY
-    if (!apiKey) {
-      return res.json({ ...makeDemoCopy({ name, category, details, tone }), message: 'Демонстрационный режим. Для реальной генерации добавьте GEMINI_API_KEY в .env.' })
+    const apiConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN)
+    if (!apiConfigured) {
+      return res.json({ ...makeDemoCopy({ name, category, details, tone }), message: 'Демонстрационный режим. Для реальной генерации добавьте CLOUDFLARE_ACCOUNT_ID и CLOUDFLARE_API_TOKEN в .env.' })
     }
 
     const prompt = [
@@ -411,17 +436,17 @@ export async function createApp(options = {}) {
       'Используй только факты из исходных данных. Не выдумывай материалы, размеры, гарантию, сертификаты, страну производства и свойства.',
       'Стиль: ' + tone + '. Категория: ' + category + '. Название: ' + name + '. Характеристики: ' + details + '.',
       'Верни только JSON с двумя строковыми полями: description и seoTitle.',
-    ].join('\\n')
+    ].join('\n')
     try {
-      const result = await generateGeminiJson(prompt, 900)
+      const result = await generateCloudflareJson(prompt, 900)
       const description = cleanText(result.data.description, 3000)
       const seoTitle = cleanText(result.data.seoTitle, 180)
-      if (!description || !seoTitle) return res.status(502).json({ error: 'Gemini не вернул описание и SEO-заголовок.' })
+      if (!description || !seoTitle) return res.status(502).json({ error: 'Cloudflare Workers AI не вернул описание и SEO-заголовок.' })
       res.json({ description, seoTitle, provider: 'live', model: result.model })
     } catch (error) {
-      if (error.message === 'GEMINI_RATE_LIMIT') return res.status(429).json({ error: 'Бесплатный лимит Gemini временно исчерпан. Попробуйте позже.' })
-      console.error('Gemini product copy failed:', error.message)
-      return res.status(502).json({ error: 'Gemini временно не смог создать описание. Проверьте API-ключ и модель.' })
+      if (error.message === 'CLOUDFLARE_RATE_LIMIT') return res.status(429).json({ error: 'Дневная квота Cloudflare Workers AI временно исчерпана. Попробуйте позже.' })
+      console.error('Cloudflare product copy failed:', error.message)
+      return res.status(502).json({ error: 'Cloudflare Workers AI временно не смог создать описание. Проверьте API-ключ и модель.' })
     }
   }))
 
@@ -441,9 +466,9 @@ export async function createApp(options = {}) {
       language: req.body.language === 'en' ? 'English' : 'Russian',
     }
     if (!brief.products) return res.status(400).json({ error: 'Опишите товары, которые будет продавать магазин.' })
-    const apiKey = process.env.GEMINI_API_KEY || process.env.SHOPAI_AI_API_KEY
-    if (!apiKey) {
-      return res.status(503).json({ error: 'Gemini API не подключён. Добавьте GEMINI_API_KEY в файл .env и перезапустите сервер.' })
+    const apiConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN)
+    if (!apiConfigured) {
+      return res.status(503).json({ error: 'Cloudflare Workers AI не подключён. Добавьте CLOUDFLARE_ACCOUNT_ID и CLOUDFLARE_API_TOKEN в файл .env и перезапустите сервер.' })
     }
     const palette = SITE_PALETTES[brief.palette]
     const prompt = [
@@ -466,18 +491,18 @@ export async function createApp(options = {}) {
       'Visual layout: ' + brief.style,
       'Palette: ' + brief.palette + ' (' + palette.primary + ')',
       'Create landing-page copy and SEO fields. Avoid generic filler.',
-    ].join('\\n')
+    ].join('\n')
     try {
-      const result = await generateGeminiJson(prompt, 1500)
+      const result = await generateCloudflareJson(prompt, 1500)
       const config = safeSiteConfig({ ...result.data, palette: brief.palette, designStyle: brief.style })
       if (!config?.heroTitle || !config?.heroSubtitle || !config?.aboutText) {
-        return res.status(502).json({ error: 'Gemini не вернул все обязательные блоки сайта. Попробуйте ещё раз.' })
+        return res.status(502).json({ error: 'Cloudflare Workers AI не вернул все обязательные блоки сайта. Попробуйте ещё раз.' })
       }
-      res.json({ siteConfig: config, provider: 'gemini', model: result.model })
+      res.json({ siteConfig: config, provider: 'cloudflare-workers-ai', model: result.model })
     } catch (error) {
-      if (error.message === 'GEMINI_RATE_LIMIT') return res.status(429).json({ error: 'Бесплатный лимит Gemini временно исчерпан. Попробуйте позже.' })
-      console.error('Gemini storefront generation failed:', error.message)
-      return res.status(502).json({ error: 'Gemini не смог создать сайт. Проверьте ключ и попробуйте ещё раз.' })
+      if (error.message === 'CLOUDFLARE_RATE_LIMIT') return res.status(429).json({ error: 'Дневная квота Cloudflare Workers AI временно исчерпана. Попробуйте позже.' })
+      console.error('Cloudflare storefront generation failed:', error.message)
+      return res.status(502).json({ error: 'Cloudflare Workers AI не смог создать сайт. Проверьте ключ и попробуйте ещё раз.' })
     }
   }))
 
